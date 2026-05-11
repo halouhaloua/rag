@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+media/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files - 保护敏感信息
+env/dev.env
+env/uat.env
+env/prod.env
+# 保留示例文件
+!env/example.env
+
+# Database
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Media files
+media/
+!media/.gitkeep
+
+# Chunk uploads temp
+media/chunk_uploads/
+
+# Cache
+.cache/
+*.pyc
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic
+alembic/versions/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
