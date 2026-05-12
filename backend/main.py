@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: main.py
-@Desc: 应用生命周期管理 - # 启动时
-"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
@@ -18,6 +9,8 @@ from zq_demo.router import router as zq_demo_router
 from core.router import router as core_router
 from scheduler.router import router as scheduler_router
 from core.websocket.router import router as websocket_router
+from graphrag.router import router as rag_router
+
 from utils.auth_middleware import AuthMiddleware
 
 # 全局OAuth2方案，用于Swagger显示小锁图标
@@ -69,6 +62,7 @@ app.add_middleware(AuthMiddleware)
 app.include_router(zq_demo_router, prefix="/api/v1", dependencies=[Depends(oauth2_scheme)])
 app.include_router(core_router, prefix="/api/core", dependencies=[Depends(oauth2_scheme)])
 app.include_router(scheduler_router, prefix="/api", dependencies=[Depends(oauth2_scheme)])
+app.include_router(rag_router, prefix="/rag", dependencies=[Depends(oauth2_scheme)])
 # WebSocket路由（不需要OAuth2依赖，WebSocket自己处理认证）
 app.include_router(websocket_router)
 

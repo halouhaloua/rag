@@ -1,10 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+
 """
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: base_service.py
 @Desc: 通用服务基类 - 提供增删改查和Excel导入导出的通用实现
 """
 from io import BytesIO

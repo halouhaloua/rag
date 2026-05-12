@@ -1,18 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: config.py
-@Desc: 应用配置 - # 环境标识
-"""
+
 import os
 from typing import Literal, Optional
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+import pathlib
+file_path = pathlib.Path(__file__).parent.parent / "upload_file"
 
 class Settings(BaseSettings):
     """应用配置"""
@@ -57,8 +51,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # Refresh Token过期时间（天）
 
     # 文件存储配置
-    FILE_STORAGE_TYPE: str = "minio"  # local/oss/minio/azure
-    FILE_STORAGE_LOCAL_PATH: Optional[str] = None  # 本地存储路径
+    FILE_STORAGE_TYPE: str = "local"  # local/oss/minio/azure
+    FILE_STORAGE_LOCAL_PATH: Optional[str] = str(file_path)  # 本地存储路径
     # OSS配置
     OSS_ENDPOINT: Optional[str] = None
     OSS_ACCESS_KEY_ID: Optional[str] = None
