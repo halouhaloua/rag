@@ -114,30 +114,6 @@ async def clear_cache_files(kb_id: str, file_id: str):
         logger.error(f"Error clearing cache files for {file_id}: {e}")
 
 
-async def clear_kb_cache(kb_id: str):
-    try:
-        cache_dir = path / f"retriever/faiss_cache_new"
-        if os.path.exists(cache_dir):
-            for item in os.listdir(cache_dir):
-                item_path = os.path.join(cache_dir, item)
-                if os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-        for dir_name in ["graphs", "chunks", "logs"]:
-            dir_path = path / f"output/{dir_name}"
-            if os.path.exists(dir_path):
-                for fp in glob.glob(str(dir_path / f"*")):
-                    try:
-                        if os.path.isfile(fp):
-                            os.remove(fp)
-                        elif os.path.isdir(fp):
-                            shutil.rmtree(fp)
-                    except Exception as e:
-                        logger.warning(f"Failed to clear {fp}: {e}")
-        logger.info(f"Full cache cleanup for kb: {kb_id}")
-    except Exception as e:
-        logger.error(f"Error clearing KB cache {kb_id}: {e}")
-
-
 async def extract_text_from_document(file_path: str, file_ext: str) -> str:
     try:
         if file_ext in [".txt", ".md"]:
@@ -288,7 +264,8 @@ async def construct_file_graph_service(
 
     await send_progress_update(client_id, "construction", 10, "加载配置...")
     builder = constructor.KTBuilder(
-        file_id, schema_path, mode=cfg.construction.mode, config=cfg
+        file_id, schema_path, mode=cfg.construction.mode, config=cfg,
+        schema_data=schema,
     )
 
     await send_progress_update(client_id, "construction", 20, "开始实体关系抽取...")
@@ -300,26 +277,8 @@ async def construct_file_graph_service(
     await loop.run_in_executor(None, build_graph_sync)
 
     await send_progress_update(client_id, "construction", 85, "保存图谱数据...")
-    graph_file = path / f"output/graphs/{file_id}_new.json"
-    chunk_file_path = path / f"output/chunks/{file_id}.txt"
-
-    graph_data = None
-    chunks_data = None
-    if os.path.exists(graph_file):
-        with open(graph_file, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-
-    if os.path.exists(chunk_file_path):
-        chunks_data = {}
-        with open(chunk_file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("id:") and "Chunk:" in line:
-                    parts = line.split("\t", 1)
-                    if len(parts) == 2:
-                        cid = parts[0].replace("id:", "").strip()
-                        ctext = parts[1].replace("Chunk:", "", 1).strip()
-                        chunks_data[cid] = ctext
+    chunks_data = dict(getattr(builder, 'all_chunks', {})) or None
+    graph_data = builder.format_output() if hasattr(builder, 'format_output') else None
 
     from app.base_model import generate_nanoid
 
@@ -345,7 +304,7 @@ async def construct_file_graph_service(
     os.unlink(schema_path)
 
     await send_progress_update(client_id, "construction", 95, "准备可视化数据...")
-    graph_vis_data = await prepare_graph_visualization(str(graph_file))
+    graph_vis_data = await prepare_graph_visualization_from_data(graph_data)
     await send_progress_update(client_id, "construction", 100, "图谱构建完成!")
 
     try:
@@ -430,36 +389,36 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
         graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
     if not graph_record:
         graph_record = await _get_graph_from_file(file_id)
-    if not graph_record or not graph_record.get("graph_data"):
+    if not graph_record:
         yield _sse(type="error", message="Graph not found. Please construct graph first.")
         return
+    graph_data_source = graph_record.graph_data if hasattr(graph_record, 'graph_data') else graph_record.get("graph_data")
+    if not graph_data_source:
+        yield _sse(type="error", message="Graph data is empty.")
+        return
 
-    yield _sse(type="status", progress=20, message="写入临时文件...")
+    yield _sse(type="status", progress=20, message="初始化检索系统...")
     dataset_name = file_id
-    graph_path = path / f"output/graphs/{dataset_name}_new.json"
-    schema_path = path / f"output/schemas/{dataset_name}.json"
-
-    os.makedirs(path / "output/schemas", exist_ok=True)
-    with open(graph_path, "w", encoding="utf-8") as f:
-        json.dump(graph_record["graph_data"], f, ensure_ascii=False, indent=2)
-
     file_record = await KnowledgeBaseFileService.get_by_id(db, file_id) if db else None
     schema = _ensure_schema(file_record.schema_json if file_record else None)
-    with open(schema_path, "w", encoding="utf-8") as f:
-        json.dump(schema, f, ensure_ascii=False, indent=2)
 
     yield _sse(type="status", progress=30, message="初始化检索系统...")
 
     cfg = get_config_instance()
-    graphq = decomposer.GraphQ(dataset_name, config=None)
+    graphq = decomposer.GraphQ(dataset_name, config=None, schema_data=schema)
+    chunks_data = None
+    if db and graph_record and hasattr(graph_record, 'chunks_data'):
+        chunks_data = graph_record.chunks_data
     kt_retriever = retriever.KTRetriever(
         dataset_name,
-        str(graph_path),
+        '',
         recall_paths=cfg.retrieval.recall_paths,
-        schema_path=str(schema_path),
+        schema_path='',
         top_k=cfg.retrieval.top_k_filter,
         mode="agent",
         config=cfg,
+        chunks_data=chunks_data,
+        graph_data=graph_data_source,
     )
 
     yield _sse(type="status", progress=40, message="构建索引...")
@@ -473,7 +432,7 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
 
     yield _sse(type="status", progress=50, message="问题分解...")
     try:
-        decomposition = graphq.decompose(question, str(schema_path))
+        decomposition = graphq.decompose(question, '')
         sub_questions = decomposition.get("sub_questions", [])
         involved_types = decomposition.get("involved_types", {})
     except Exception as e:
@@ -667,14 +626,6 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
     yield _sse(type="reasoning_steps", data={"reasoning_steps": reasoning_steps})
     yield _sse(type="visualization", data=visualization_data)
     yield _sse(type="done", answer=final_answer)
-
-    try:
-        if os.path.exists(graph_path):
-            os.remove(graph_path)
-        if os.path.exists(schema_path):
-            os.remove(schema_path)
-    except Exception:
-        pass
 
 
 async def _get_graph_from_file(file_id: str) -> Optional[Dict]:

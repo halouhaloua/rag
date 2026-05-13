@@ -10,7 +10,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { ElMessage, ElOption, ElSelect } from 'element-plus';
+import { ElMessage } from 'element-plus';
 
 import {
   getFileListApi,
@@ -19,6 +19,7 @@ import {
 } from '#/api/core/rag';
 import GraphToolbar from '#/components/rag/GraphToolbar.vue';
 import GraphVisualization from '#/components/rag/GraphVisualization.vue';
+import KbFileSelector from '#/components/rag/KbFileSelector.vue';
 
 defineOptions({ name: 'GraphView' });
 
@@ -29,6 +30,7 @@ const selectedFileId = ref('');
 const graphData = ref<GraphData | null>(null);
 const loading = ref(false);
 const currentLayout = ref<LayoutType>('force');
+const showSelector = ref(false);
 
 const selectedKbName = computed(
   () => kbs.value.find((kb) => kb.id === selectedKbId.value)?.name || '',
@@ -66,7 +68,6 @@ async function loadGraph(kbId: string, fileId: string) {
 }
 
 watch(selectedKbId, (kbId) => {
-  selectedFileId.value = '';
   graphData.value = null;
   loadFiles(kbId);
 });
@@ -101,62 +102,26 @@ function onColorSchemeChange() {
   graphVizRef.value?.updateColors();
 }
 
+function onKbFileSelect(kbId: string, fileId: string) {
+  selectedKbId.value = kbId;
+  selectedFileId.value = fileId;
+}
+
 onMounted(() => {
   loadKbs();
 });
 </script>
 
 <template>
-  <Page>
+  <Page auto-content-height>
     <div class="graph-view">
-      <div class="selector-bar">
-        <div class="selector-item">
-          <span class="label">知识库：</span>
-          <ElSelect
-            v-model="selectedKbId"
-            placeholder="选择知识库"
-            style="width: 200px"
-            size="small"
-            clearable
-          >
-            <ElOption
-              v-for="kb in kbs"
-              :key="kb.id"
-              :label="kb.name"
-              :value="kb.id"
-            />
-          </ElSelect>
-        </div>
-        <div class="selector-item">
-          <span class="label">文件：</span>
-          <ElSelect
-            v-model="selectedFileId"
-            placeholder="选择已构建图谱的文件"
-            style="width: 240px"
-            size="small"
-            :disabled="!selectedKbId"
-            clearable
-          >
-            <ElOption
-              v-for="f in files"
-              :key="f.id"
-              :label="f.filename"
-              :value="f.id"
-            />
-          </ElSelect>
-        </div>
-      </div>
-
-      <div v-if="!selectedFileId" class="empty-hint">
-        请先选择知识库和已构建图谱的文件
-      </div>
-
-      <div v-else class="graph-wrapper">
+      <div class="graph-wrapper">
         <GraphToolbar
           :current-layout="currentLayout"
           :kb-name="selectedKbName"
           :file-label="selectedFileName"
           :loading="loading"
+          @open-selector="showSelector = true"
           @refresh="onRefresh"
           @reset="onReset"
           @color-scheme-change="onColorSchemeChange"
@@ -170,6 +135,13 @@ onMounted(() => {
         />
       </div>
     </div>
+    <KbFileSelector
+      v-model="showSelector"
+      :kbs="kbs"
+      :selected-kb-id="selectedKbId"
+      :selected-file-id="selectedFileId"
+      @select="onKbFileSelect"
+    />
   </Page>
 </template>
 
@@ -177,39 +149,7 @@ onMounted(() => {
 .graph-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 140px);
-}
-
-.selector-bar {
-  display: flex;
-  flex-shrink: 0;
-  gap: 16px;
-  align-items: center;
-  padding: 10px 16px;
-  margin-bottom: 12px;
-  background: var(--el-bg-color-overlay);
-  border-radius: 8px;
-}
-
-.selector-item {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.selector-item .label {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-}
-
-.empty-hint {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: var(--el-text-color-secondary);
+  height: 100%;
 }
 
 .graph-wrapper {

@@ -1,3 +1,4 @@
+import json
 import json_repair
 from graphrag.utils import call_llm_api
 
@@ -8,7 +9,7 @@ except ImportError:
 
 
 class GraphQ:
-    def __init__(self, dataset_name, config=None):
+    def __init__(self, dataset_name, config=None, schema_data=None):
         if config is None and get_config is not None:
             try:
                 self.config = get_config()
@@ -18,8 +19,11 @@ class GraphQ:
             self.config = config
         self.llm_client = call_llm_api.LLMCompletionCall()
         self.dataset_name = dataset_name
+        self.schema_data = schema_data
 
-    def read_schema(self, schema_path: str) -> str:
+    def read_schema(self, schema_path: str = '') -> str:
+        if self.schema_data:
+            return json.dumps(self.schema_data, ensure_ascii=False)
         with open(schema_path, "r") as f:
             schema = f.read()
         return schema

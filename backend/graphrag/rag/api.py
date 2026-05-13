@@ -122,8 +122,12 @@ async def delete_knowledge_base(kb_id: str, db: AsyncSession = Depends(get_db)):
     kb = await KnowledgeBaseService.get_by_id(db, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    from graphrag.rag.service import clear_kb_cache
-    await clear_kb_cache(kb_id)
+    from graphrag.rag.service import clear_cache_files
+    files = await KnowledgeBaseFileService.get_files_by_kb(db, kb_id)
+    for f in files:
+        await clear_cache_files(kb_id, f.id)
+        await KnowledgeGraphService.delete_by_file(db, f.id)
+        await KnowledgeBaseFileService.delete(db, f.id)
     success = await KnowledgeBaseService.delete(db, kb_id)
     if not success:
         raise HTTPException(status_code=404, detail="知识库不存在")
@@ -215,6 +219,7 @@ async def delete_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(ge
         raise HTTPException(status_code=404, detail="文件不存在")
     from graphrag.rag.service import clear_cache_files
     await clear_cache_files(kb_id, file_id)
+    await KnowledgeGraphService.delete_by_file(db, file_id)
     success = await KnowledgeBaseFileService.delete(db, file_id)
     if not success:
         raise HTTPException(status_code=404, detail="文件不存在")

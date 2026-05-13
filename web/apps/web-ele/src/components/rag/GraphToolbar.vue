@@ -3,6 +3,8 @@ import type { LayoutType } from '#/composables/useGraphLayout';
 
 import { ref } from 'vue';
 
+import { FolderOpen } from '@vben/icons';
+
 import { Aim, Brush, Refresh } from '@element-plus/icons-vue';
 import {
   ElDivider,
@@ -30,6 +32,7 @@ defineProps<{
 const emit = defineEmits<{
   colorSchemeChange: [schemeKey: string];
   layoutChange: [layout: LayoutType];
+  openSelector: [];
   refresh: [];
   reset: [];
 }>();
@@ -71,6 +74,12 @@ function handleSchemeChange(schemeKey: string) {
 <template>
   <div class="floating-toolbar">
     <div class="toolbar-group">
+      <ElTooltip content="选择知识库和文件" placement="bottom">
+        <div class="dataset-selector-btn" @click="$emit('openSelector')">
+          <ElIcon :size="18"><FolderOpen /></ElIcon>
+        </div>
+      </ElTooltip>
+
       <span v-if="kbName" class="dataset-label">
         {{ kbName }}{{ fileLabel ? ` / ${fileLabel}` : '' }}
       </span>
@@ -158,6 +167,28 @@ function handleSchemeChange(schemeKey: string) {
 .toolbar-group :deep(.el-divider) {
   height: 20px;
   margin: 0 4px;
+}
+
+.dataset-selector-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  background: #f5f3ff;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.dataset-selector-btn:hover {
+  background: #ede9fe;
+  transform: scale(1.05);
+}
+
+.dataset-selector-btn:active {
+  transform: scale(0.95);
 }
 
 .color-btn {

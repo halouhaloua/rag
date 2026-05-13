@@ -95,7 +95,10 @@ class KnowledgeGraphService(
 
     @classmethod
     async def get_by_file(cls, db: AsyncSession, file_id: str) -> Optional[KnowledgeGraph]:
-        query = select(cls.model).where(cls.model.file_id == file_id)
+        query = select(cls.model).where(
+            cls.model.file_id == file_id,
+            cls.model.is_deleted == False,
+        )
         result = await db.execute(query)
         return result.scalar_one_or_none()
 

@@ -1,22 +1,36 @@
 <script lang="ts" setup>
-import { ref, onMounted, watch } from 'vue';
+import type {
+  ChatConversation,
+  KnowledgeBase,
+  KnowledgeBaseFile,
+} from '#/api/core/rag';
+import type { ChatMessageItem } from '#/composables/useChat';
+
+import { onMounted, ref, watch } from 'vue';
+
 import { Page } from '@vben/common-ui';
-import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Trash2 } from '@vben/icons';
-import type { KnowledgeBase, KnowledgeBaseFile, ChatConversation } from '#/api/core/rag';
+
 import {
-  getKnowledgeBaseListApi,
-  getFileListApi,
-  createConversationApi,
-  getUserConversationsApi,
-  getChatHistoryApi,
-  deleteConversationApi,
+  ElButton,
+  ElMessage,
+  ElMessageBox,
+  ElOption,
+  ElSelect,
+} from 'element-plus';
+
+import {
   chatCompletionStream,
+  createConversationApi,
+  deleteConversationApi,
+  getChatHistoryApi,
+  getFileListApi,
   getIRCoTStatusApi,
+  getKnowledgeBaseListApi,
+  getUserConversationsApi,
   setIRCoTEnabledApi,
 } from '#/api/core/rag';
 import ChatArea from '#/components/rag/ChatArea.vue';
-import type { ChatMessageItem } from '#/composables/useChat';
 
 defineOptions({ name: 'QAPage' });
 
@@ -27,7 +41,7 @@ const selectedKbId = ref('');
 const files = ref<KnowledgeBaseFile[]>([]);
 const selectedFileId = ref('');
 const conversations = ref<ChatConversation[]>([]);
-const selectedConvId = ref<string | null>(null);
+const selectedConvId = ref<null | string>(null);
 
 const messages = ref<ChatMessageItem[]>([]);
 const isStreaming = ref(false);
@@ -42,7 +56,10 @@ async function loadKbs() {
 }
 
 async function loadFiles(kbId: string) {
-  if (!kbId) { files.value = []; return; }
+  if (!kbId) {
+    files.value = [];
+    return;
+  }
   const res = await getFileListApi(kbId);
   files.value = res.items.filter((f) => f.has_graph);
 }
@@ -63,7 +80,8 @@ async function loadHistory(convId: string) {
     messages.value = history.map((m: any, i: number) => ({
       id: `hist_${i}`,
       role: m.role,
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      content:
+        typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
       timestamp: new Date(m.sys_create_datetime).getTime(),
     }));
     msgCounter = messages.value.length;
@@ -76,13 +94,16 @@ async function loadHistory(convId: string) {
 
 async function handleNewConversation() {
   try {
-    const conv = await createConversationApi({ user_id: USER_ID, title: '新对话' });
+    const conv = await createConversationApi({
+      user_id: USER_ID,
+      title: '新对话',
+    });
     conversations.value.unshift(conv);
     selectedConvId.value = conv.id;
     messages.value = [];
     msgCounter = 0;
-  } catch (err: any) {
-    ElMessage.error(err.message || '创建对话失败');
+  } catch (error: any) {
+    ElMessage.error(error.message || '创建对话失败');
   }
 }
 
@@ -93,7 +114,9 @@ async function handleSelectConversation(convId: string) {
 
 async function handleDeleteConversation(convId: string) {
   try {
-    await ElMessageBox.confirm('确定删除此对话？', '删除确认', { type: 'warning' });
+    await ElMessageBox.confirm('确定删除此对话？', '删除确认', {
+      type: 'warning',
+    });
     await deleteConversationApi(convId);
     conversations.value = conversations.value.filter((c) => c.id !== convId);
     if (selectedConvId.value === convId) {
@@ -129,7 +152,7 @@ function formatTime(dt: string): string {
   const d = new Date(dt);
   const now = Date.now();
   const diff = now - d.getTime();
-  const minutes = Math.floor(diff / 60000);
+  const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return '刚刚';
   if (minutes < 60) return `${minutes} 分钟前`;
   const hours = Math.floor(minutes / 60);
@@ -140,7 +163,7 @@ function formatTime(dt: string): string {
 }
 
 function truncateTitle(title: string): string {
-  return title.length > 20 ? title.slice(0, 20) + '...' : title;
+  return title.length > 20 ? `${title.slice(0, 20)}...` : title;
 }
 
 async function handleSend(question: string) {
@@ -196,8 +219,8 @@ async function handleSend(question: string) {
         },
       },
     );
-  } catch (err: any) {
-    ElMessage.error(err.message || '请求失败');
+  } catch (error: any) {
+    ElMessage.error(error.message || '请求失败');
     isStreaming.value = false;
   }
 }
@@ -215,17 +238,26 @@ watch(selectedKbId, (kbId) => {
 onMounted(() => {
   loadKbs();
   loadConversations();
-  getIRCoTStatusApi().then((cfg) => { ircotEnabled.value = cfg.enable_ircot; }).catch(() => {});
+  getIRCoTStatusApi()
+    .then((cfg) => {
+      ircotEnabled.value = cfg.enable_ircot;
+    })
+    .catch(() => {});
 });
 </script>
 
 <template>
-  <Page>
+  <Page auto-content-height>
     <div class="qa-page">
       <div class="sidebar">
         <div class="sidebar-header">
           <h3>对话历史</h3>
-          <ElButton :icon="Plus" circle size="small" @click="handleNewConversation" />
+          <ElButton
+            :icon="Plus"
+            circle
+            size="small"
+            @click="handleNewConversation"
+          />
         </div>
         <div class="conv-list">
           <div
@@ -236,7 +268,9 @@ onMounted(() => {
             @click="handleSelectConversation(conv.id)"
           >
             <div class="conv-title">{{ truncateTitle(conv.title) }}</div>
-            <div class="conv-time">{{ formatTime(conv.sys_create_datetime) }}</div>
+            <div class="conv-time">
+              {{ formatTime(conv.sys_create_datetime) }}
+            </div>
             <ElButton
               link
               type="danger"
@@ -307,7 +341,7 @@ onMounted(() => {
 .qa-page {
   display: flex;
   gap: 12px;
-  height: calc(100vh - 140px);
+  height: 100%;
 }
 
 .sidebar {

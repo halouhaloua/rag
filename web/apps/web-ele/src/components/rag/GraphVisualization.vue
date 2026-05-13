@@ -133,15 +133,22 @@ defineExpose({
     <div class="graph-main">
       <div ref="containerRef" class="chart-container"></div>
 
-      <NodeSearchBar
-        v-model:search-query="searchQuery"
-        v-model:is-search-focused="isSearchFocused"
-        v-model:show-search-results="showSearchResults"
-        v-model:selected-result-index="selectedResultIndex"
-        :filtered-nodes="filteredNodes"
-        @node-select="selectAndLocateNode"
-        @search-and-locate="searchAndLocate"
-      />
+      <div v-if="!graphData" class="empty-hint">
+        请先选择知识库和已构建图谱的文件
+      </div>
+
+      <div class="top-left-panel">
+        <slot></slot>
+        <NodeSearchBar
+          v-model:search-query="searchQuery"
+          v-model:is-search-focused="isSearchFocused"
+          v-model:show-search-results="showSearchResults"
+          v-model:selected-result-index="selectedResultIndex"
+          :filtered-nodes="filteredNodes"
+          @node-select="selectAndLocateNode"
+          @search-and-locate="searchAndLocate"
+        />
+      </div>
 
       <NodeDetailsPanel :node="selectedNode" @close="selectedNode = null" />
 
@@ -149,14 +156,11 @@ defineExpose({
         :nodes="graphData?.nodes || []"
         :selected-type="selectedType"
         :color-version="colorVersion"
+        :stats-nodes="graphData?.stats.total_nodes ?? 0"
+        :edges="graphData?.stats.total_edges ?? 0"
         @type-click="filterByType"
         @clear-filter="clearFilter"
       />
-    </div>
-
-    <div v-if="graphData" class="graph-stats">
-      节点: {{ graphData.stats.total_nodes }} | 边:
-      {{ graphData.stats.total_edges }}
     </div>
   </div>
 </template>
@@ -180,12 +184,23 @@ defineExpose({
   height: 100%;
 }
 
-.graph-stats {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 12px;
+.empty-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 50;
+  font-size: 16px;
   color: var(--el-text-color-secondary);
-  background: var(--el-bg-color-overlay);
-  border-top: 1px solid var(--el-border-color-lighter);
+  transform: translate(-50%, -50%);
+}
+
+.top-left-panel {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 </style>

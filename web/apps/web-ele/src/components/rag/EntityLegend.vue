@@ -14,8 +14,10 @@ interface LegendItem {
 
 const props = defineProps<{
   colorVersion: number;
+  edges?: number;
   nodes: GraphNode[];
   selectedType: null | string;
+  statsNodes?: number;
 }>();
 
 defineEmits<{
@@ -51,7 +53,9 @@ const totalNodes = computed(() => props.nodes.length);
   <div class="entity-legend">
     <div class="legend-header">
       <h5>ENTITY TYPES</h5>
-      <span class="total-count">{{ totalNodes }} nodes</span>
+      <span class="total-count">
+        节点: {{ statsNodes ?? totalNodes }} | 边: {{ edges ?? 0 }}
+      </span>
     </div>
     <div class="legend-content">
       <div
@@ -87,8 +91,8 @@ const totalNodes = computed(() => props.nodes.length);
 <style scoped>
 .entity-legend {
   position: absolute;
+  right: 20px;
   bottom: 20px;
-  left: 20px;
   z-index: 100;
   width: 220px;
   background: rgb(255 255 255 / 95%);

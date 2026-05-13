@@ -22,6 +22,21 @@ from graphrag.utils.logger import logger
 from graphrag.config import get_config
 
 
+_nlp_instance = None
+_nlp_lock = threading.Lock()
+
+
+def _get_nlp():
+    global _nlp_instance
+    if _nlp_instance is not None:
+        return _nlp_instance
+    with _nlp_lock:
+        if _nlp_instance is not None:
+            return _nlp_instance
+        cfg = get_config()
+        _nlp_instance = spacy.load(cfg.nlp.spacy_model)
+        return _nlp_instance
+
 
 
 class KTRetriever:
@@ -37,6 +52,8 @@ class KTRetriever:
         schema_path: str = '',
         mode: str = "agent",
         config=get_config(),
+        chunks_data: Optional[dict] = None,
+        graph_data: Optional[list] = None,
     ):
         self.config = config
 
@@ -56,7 +73,10 @@ class KTRetriever:
             mode = mode if mode != "agent" else config.triggers.mode
 
 
-        self.graph = graph_processor.load_graph_from_json(json_path)
+        if graph_data is not None:
+            self.graph = graph_processor.load_graph_from_json_data(graph_data)
+        else:
+            self.graph = graph_processor.load_graph_from_json(json_path)
         self.qa_encoder = config.embeddings.get_model()
 
         self.llm_client = call_llm_api.LLMCompletionCall()
@@ -73,7 +93,7 @@ class KTRetriever:
         os.makedirs(cache_dir, exist_ok=True)
         self.debug_mode = True
 
-        self.nlp = spacy.load(config.nlp.spacy_model)
+        self.nlp = _get_nlp()
 
         self.faiss_retriever = DualFAISSRetriever(
             dataset = dataset,
@@ -104,27 +124,7 @@ class KTRetriever:
         self.node_embeddings_precomputed = False
         self.precompute_lock = threading.Lock()
 
-        self.chunk2id = {}
-        chunk_file = config.output.chunks_dir + f"/{self.dataset}.txt"
-        if os.path.exists(chunk_file):
-            try:
-                with open(chunk_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and "\t" in line:
-                            parts = line.split("\t", 1)
-                            if (
-                                len(parts) == 2
-                                and parts[0].startswith("id: ")
-                                and parts[1].startswith("Chunk: ")
-                            ):
-                                chunk_id = parts[0][4:]
-                                chunk_text = parts[1][7:]
-                                self.chunk2id[chunk_id] = chunk_text
-                logger.info(f"Loaded {len(self.chunk2id)} chunks from {chunk_file}")
-            except Exception as e:
-                logger.error(f"Error loading chunks from {chunk_file}: {e}")
-                self.chunk2id = {}
+        self.chunk2id = dict(chunks_data) if chunks_data else {}
 
         self._node_text_index = {}
         self.use_exact_keyword_matching = (

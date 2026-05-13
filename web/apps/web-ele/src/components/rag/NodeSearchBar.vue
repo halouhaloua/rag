@@ -119,11 +119,9 @@ function selectAndLocateNode(node: GraphNode) {
 
 <style scoped>
 .node-search-container {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 100;
-  width: 280px;
+  position: relative;
+  flex: 1;
+  max-width: 260px;
 }
 
 .search-input-wrapper {

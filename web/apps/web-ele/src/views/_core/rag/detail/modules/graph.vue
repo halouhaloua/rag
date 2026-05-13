@@ -119,7 +119,7 @@ onMounted(() => {
 .graph-tab {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 220px);
+  height: 100%;
   min-height: 500px;
   padding: 8px 0;
 }

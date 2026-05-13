@@ -16,13 +16,17 @@ from graphrag.utils import call_llm_api, graph_processor
 from graphrag.utils.logger import logger
 
 
-def load_schema(schema_path) -> Dict[str, Any]:
-    try:
-        with open(schema_path, "r", encoding="utf-8") as f:
-            schema = json.load(f)
-            return schema
-    except FileNotFoundError:
-        return dict()
+def load_schema(schema_path=None, schema_data=None) -> Dict[str, Any]:
+    if schema_data is not None:
+        return schema_data
+    if schema_path:
+        try:
+            with open(schema_path, "r", encoding="utf-8") as f:
+                schema = json.load(f)
+                return schema
+        except FileNotFoundError:
+            return dict()
+    return dict()
 
 
 def _split_text_with_overlap(
@@ -95,14 +99,15 @@ def _validate_triple_format(triple: list) -> tuple:
 
 
 class KTBuilder:
-    def __init__(self, dataset_name, schema_path=None, mode=None, config=None):
+    def __init__(self, dataset_name, schema_path=None, mode=None, config=None, schema_data=None):
         if config is None:
             config = get_config()
 
         self.config = config
         self.dataset_name = dataset_name
         self.schema = load_schema(
-            schema_path or config.get_dataset_config(dataset_name).schema_path
+            schema_path or config.get_dataset_config(dataset_name).schema_path,
+            schema_data,
         )
         self.graph = nx.MultiDiGraph()
         self.node_counter = 0
@@ -147,20 +152,6 @@ class KTBuilder:
             self.all_chunks.update(chunk2id)
 
         return chunks, chunk2id
-
-    def save_chunks_to_file(self):
-        os.makedirs("output/chunks", exist_ok=True)
-        chunk_file = f"output/chunks/{self.dataset_name}.txt"
-
-        # When reconstructing, we want a fresh start, not appending to old data
-        all_data = self.all_chunks
-
-        with open(chunk_file, "w", encoding="utf-8") as f:
-            for chunk_id, chunk_text in all_data.items():
-                escaped = chunk_text.replace("\n", "\\n").replace("\t", "\\t")
-                f.write(f"id: {chunk_id}\tChunk: {escaped}\n")
-
-        logger.info(f"Chunk data saved to {chunk_file} ({len(all_data)} chunks)")
 
     def extract_with_llm(self, prompt: str):
         response = self.llm_client.call_api(prompt)
@@ -503,14 +494,5 @@ class KTBuilder:
 
         logger.info(f"All Process finished, token cost: {self.token_len}")
 
-        self.save_chunks_to_file()
-
         output = self.format_output()
-
-        json_output_path = f"output/graphs/{self.dataset_name}_new.json"
-        os.makedirs("output/graphs", exist_ok=True)
-        with open(json_output_path, "w", encoding="utf-8") as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-        logger.info(f"Graph saved to {json_output_path}")
-
         return output

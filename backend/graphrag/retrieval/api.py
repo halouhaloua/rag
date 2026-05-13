@@ -109,6 +109,8 @@ async def _sse_stream_with_persistence(req: ChatRequest, conversation_id: str):
 
 @router.post("/message/chat")
 async def chat_completion(req: ChatRequest, db: AsyncSession = Depends(get_db)):
+    if not req.file_id:
+        raise HTTPException(status_code=400, detail="file_id is required for graph-based chat")
     if not req.conversation_id:
         conv_data = ChatConversationCreate(
             user_id=req.user_id,

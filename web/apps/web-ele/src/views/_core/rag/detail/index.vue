@@ -1,13 +1,16 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue';
+import type { KnowledgeBase } from '#/api/core/rag';
+
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
 import { Edit } from '@vben/icons';
-import { ElTabs, ElTabPane, ElButton, ElMessage } from 'element-plus';
-import {
-  getKnowledgeBaseDetailApi,
-  type KnowledgeBase,
-} from '#/api/core/rag';
+
+import { ElButton, ElMessage, ElTabPane, ElTabs } from 'element-plus';
+
+import { getKnowledgeBaseDetailApi } from '#/api/core/rag';
+
 import FilesTab from './modules/files.vue';
 import GraphTab from './modules/graph.vue';
 import QaTab from './modules/qa.vue';
@@ -38,9 +41,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page>
+  <Page auto-content-height>
     <div v-if="loading" class="loading-state">加载中...</div>
-    <template v-else-if="kb">
+    <div v-else-if="kb" class="flex h-full flex-col">
       <div class="kb-header">
         <div class="kb-info">
           <h2 class="kb-title">{{ kb.name }}</h2>
@@ -51,7 +54,11 @@ onMounted(async () => {
             <span>类型: {{ kb.kb_type === 'demo' ? '演示' : '用户' }}</span>
           </div>
         </div>
-        <ElButton type="primary" :icon="Edit" @click="$router.push('/rag/knowledge-base')">
+        <ElButton
+          type="primary"
+          :icon="Edit"
+          @click="$router.push('/rag/knowledge-base')"
+        >
           返回列表
         </ElButton>
       </div>
@@ -67,7 +74,7 @@ onMounted(async () => {
           <QaTab :kb-id="kb.id" />
         </ElTabPane>
       </ElTabs>
-    </template>
+    </div>
   </Page>
 </template>
 
@@ -111,8 +118,19 @@ onMounted(async () => {
 }
 
 .kb-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   padding: 0 8px;
   background: var(--el-bg-color-overlay);
   border-radius: 8px;
+}
+
+.kb-tabs :deep(.el-tabs__content) {
+  flex: 1;
+}
+
+.kb-tabs :deep(.el-tab-pane) {
+  height: 100%;
 }
 </style>

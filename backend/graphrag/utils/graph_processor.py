@@ -111,6 +111,79 @@ def load_graph_from_json(input_path: str) -> nx.MultiDiGraph:
     return graph
 
 
+def load_graph_from_json_data(relationships: list) -> nx.MultiDiGraph:
+    """
+    Load a knowledge graph from in-memory JSON data (same format as load_graph_from_json).
+    Accepts list directly instead of a file path.
+    """
+    graph = nx.MultiDiGraph()
+    node_mapping = {}
+    node_counter = 0
+
+    for rel in relationships:
+        start_node_data = rel["start_node"]
+        end_node_data = rel["end_node"]
+        relation = rel["relation"]
+
+        start_name = start_node_data["properties"].get("name", "")
+        if isinstance(start_name, list):
+            start_name = ", ".join(str(item) for item in start_name)
+        elif not isinstance(start_name, str):
+            start_name = str(start_name)
+        start_key = (start_node_data["label"], start_name)
+        if start_key not in node_mapping:
+            node_id = f"{start_node_data['label']}_{node_counter}"
+            node_mapping[start_key] = node_id
+            node_counter += 1
+            node_attrs = {
+                "label": start_node_data["label"],
+                "properties": start_node_data["properties"],
+            }
+            if start_node_data["label"] == "attribute":
+                node_attrs["level"] = 1
+            elif start_node_data["label"] == "entity":
+                node_attrs["level"] = 2
+            elif start_node_data["label"] == "keyword":
+                node_attrs["level"] = 3
+            elif start_node_data["label"] == "community":
+                node_attrs["level"] = 4
+            else:
+                node_attrs["level"] = 2
+            graph.add_node(node_id, **node_attrs)
+
+        end_name = end_node_data["properties"].get("name", "")
+        if isinstance(end_name, list):
+            end_name = ", ".join(str(item) for item in end_name)
+        elif not isinstance(end_name, str):
+            end_name = str(end_name)
+        end_key = (end_node_data["label"], end_name)
+        if end_key not in node_mapping:
+            node_id = f"{end_node_data['label']}_{node_counter}"
+            node_mapping[end_key] = node_id
+            node_counter += 1
+            node_attrs = {
+                "label": end_node_data["label"],
+                "properties": end_node_data["properties"],
+            }
+            if end_node_data["label"] == "attribute":
+                node_attrs["level"] = 1
+            elif end_node_data["label"] == "entity":
+                node_attrs["level"] = 2
+            elif end_node_data["label"] == "keyword":
+                node_attrs["level"] = 3
+            elif end_node_data["label"] == "community":
+                node_attrs["level"] = 4
+            else:
+                node_attrs["level"] = 2
+            graph.add_node(node_id, **node_attrs)
+
+        start_id = node_mapping[start_key]
+        end_id = node_mapping[end_key]
+        graph.add_edge(start_id, end_id, relation=relation)
+
+    return graph
+
+
 def save_graph_to_json(graph: nx.MultiDiGraph, output_path: str):
     """
     Save a knowledge graph to JSON format
