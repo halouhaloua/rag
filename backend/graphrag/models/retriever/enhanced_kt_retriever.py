@@ -57,7 +57,7 @@ class KTRetriever:
 
 
         self.graph = graph_processor.load_graph_from_json(json_path)
-        self.qa_encoder = config.embeddings.model
+        self.qa_encoder = config.embeddings.get_model()
 
         self.llm_client = call_llm_api.LLMCompletionCall()
         self.llm_stream_client = call_llm_api.LLMCompletionCallStream()

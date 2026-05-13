@@ -19,15 +19,15 @@
 
 /* 限制 dialog 最大高度 */
 .zq-dialog .el-dialog {
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
+  max-height: 90vh;
 }
 
 .zq-dialog .el-dialog__body {
-  overflow: hidden;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .zq-dialog .zq-dialog-body {

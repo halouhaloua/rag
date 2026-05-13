@@ -44,7 +44,7 @@ class FastTreeComm:
                 else config.tree_comm.struct_weight
             )
 
-        self.model = config.tree_comm.embedding_model
+        self.model = config.tree_comm.get_embedding_model()
         self.semantic_cache = {}
         self.struct_weight = struct_weight
         self.node_list = list(graph.nodes())

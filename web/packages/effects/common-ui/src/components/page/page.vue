@@ -107,12 +107,12 @@ onMounted(() => {
 <style scoped>
 /* 参考 el-scrollbar 的滚动条样式 - 鼠标悬停时才显示 */
 .page-content-scroll {
-  scrollbar-width: thin;
   scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
 }
 
 .page-content-scroll:hover {
-  scrollbar-color: var(--el-scrollbar-bg-color, rgba(144, 147, 153, 0.3)) transparent;
+  scrollbar-color: var(--el-scrollbar-bg-color, rgb(144 147 153 / 30%)) transparent;
 }
 
 .page-content-scroll::-webkit-scrollbar {
@@ -127,11 +127,11 @@ onMounted(() => {
 }
 
 .page-content-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: var(--el-scrollbar-bg-color, rgba(144, 147, 153, 0.3));
+  background-color: var(--el-scrollbar-bg-color, rgb(144 147 153 / 30%));
 }
 
 .page-content-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: var(--el-scrollbar-hover-bg-color, rgba(144, 147, 153, 0.5));
+  background-color: var(--el-scrollbar-hover-bg-color, rgb(144 147 153 / 50%));
 }
 
 .page-content-scroll::-webkit-scrollbar-track {

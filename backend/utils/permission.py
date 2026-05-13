@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: permission.py
-@Desc: Permission Utils - 基于API路径的动态权限鉴权 - 
-"""
+
 """
 Permission Utils - 基于API路径的动态权限鉴权
 

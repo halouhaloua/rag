@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Text, Boolean, Integer
-from graphrag.app.base_model import BaseModel as AppBaseModel
-from graphrag.app.database import Base
-from graphrag.app.database import engine
+from app.base_model import BaseModel as AppBaseModel
+from app.database import Base
+from app.database import engine
 import asyncio
 
 

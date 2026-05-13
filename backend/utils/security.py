@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: security.py
-@Desc: Security Utils - JWT Token工具 - 用于生成和验证JWT Token
-"""
+
 """
 Security Utils - JWT Token工具
 用于生成和验证JWT Token

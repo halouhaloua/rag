@@ -44,5 +44,10 @@
   "announcementManagement": "Announcement Management",
   "messageList": "Message List",
   "dataScreen": "Data Screen",
-  "screenManagement": "Screen Management"
+  "screenManagement": "Screen Management",
+  "knowledgeGraph": "Knowledge Graph",
+  "documentView": "Documents",
+  "knowledgeBase": "Knowledge Base",
+  "graphVisualization": "Graph Visualization",
+  "qaTest": "Q&A Test"
 }

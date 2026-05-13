@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: model.py
-@Desc: Scheduler Model - 定时任务模型 - 用于管理定时任务和执行记录
-"""
+
 """
 Scheduler Model - 定时任务模型
 用于管理定时任务和执行记录

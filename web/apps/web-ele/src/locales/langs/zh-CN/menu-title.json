@@ -44,5 +44,10 @@
   "announcementManagement": "公告管理",
   "messageList": "消息列表",
   "dataScreen": "数据大屏",
-  "screenManagement": "大屏管理"
+  "screenManagement": "大屏管理",
+  "knowledgeGraph": "知识图谱",
+  "documentView": "文档管理",
+  "knowledgeBase": "知识库管理",
+  "graphVisualization": "知识图谱可视化",
+  "qaTest": "问答测试"
 }

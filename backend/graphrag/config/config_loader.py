@@ -10,10 +10,12 @@ from typing import Any, Dict, Optional
 
 from graphrag.config.prompts import prompts
 from graphrag.utils.logger import logger
-from sentence_transformers import SentenceTransformer
 
-model_path = Path(__file__).parent.parent.parent / "dir"
-model = SentenceTransformer(str(model_path))
+
+def _get_embedding_model():
+    from sentence_transformers import SentenceTransformer
+    model_path = Path(__file__).parent.parent.parent / "dir"
+    return SentenceTransformer(str(model_path))
 
 
 file_path = Path(__file__).parent.parent
@@ -44,9 +46,11 @@ class ConstructionConfig:
 
 @dataclass
 class TreeCommConfig:
-    embedding_model = model
     struct_weight: float = 0.3
     enable_fast_mode: bool = True
+
+    def get_embedding_model(self):
+        return _get_embedding_model()
 
 
 @dataclass
@@ -86,8 +90,10 @@ class RetrievalConfig:
 
 @dataclass
 class EmbeddingsConfig:
-    model = model
     device: str = "cuda"
+
+    def get_model(self):
+        return _get_embedding_model()
     batch_size: int = 32
     max_length: int = 512
 
@@ -145,10 +151,8 @@ class ConfigManager:
         if self.triggers.mode not in valid_modes:
             raise ValueError(f"mode must be {valid_modes}")
 
-    def get_dataset_config(self, dataset_name: str) -> DatasetConfig:
-        if dataset_name not in self.datasets:
-            raise ValueError(f"Dataset {dataset_name} not found")
-        return self.datasets[dataset_name]
+    def get_dataset_config(self, dataset_name: str) -> Optional[DatasetConfig]:
+        return self.datasets.get(dataset_name)
 
     def get_prompt(self, category: str, prompt_type: str) -> str:
         prompt = self.prompts.get(f"{category}_{prompt_type}")

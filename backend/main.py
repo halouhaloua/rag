@@ -5,7 +5,6 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.config import settings
 from utils.redis import RedisClient
-from zq_demo.router import router as zq_demo_router
 from core.router import router as core_router
 from scheduler.router import router as scheduler_router
 from core.websocket.router import router as websocket_router
@@ -21,6 +20,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/core/auth/login/oauth2", 
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
+    # 初始化演示知识库
+    try:
+        from scripts.seed_demo_kb import seed_demo_kb
+        await seed_demo_kb()
+    except Exception as e:
+        print(f"Warning: Failed to seed demo KB: {e}")
     # 启动定时任务调度器 (APScheduler 4.x)
     if getattr(settings, 'ENABLE_SCHEDULER', True):
         from apscheduler import AsyncScheduler
@@ -59,7 +64,6 @@ app = FastAPI(
 app.add_middleware(AuthMiddleware)
 
 # 注册路由（带全局OAuth2依赖，用于Swagger显示小锁图标）
-app.include_router(zq_demo_router, prefix="/api/v1", dependencies=[Depends(oauth2_scheme)])
 app.include_router(core_router, prefix="/api/core", dependencies=[Depends(oauth2_scheme)])
 app.include_router(scheduler_router, prefix="/api", dependencies=[Depends(oauth2_scheme)])
 app.include_router(rag_router, prefix="/rag", dependencies=[Depends(oauth2_scheme)])

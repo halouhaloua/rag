@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: excel.py
-@Desc: Excel处理工具类 - 
-"""
+
 from io import BytesIO
 from typing import List, Dict, Any, Type, Optional
 

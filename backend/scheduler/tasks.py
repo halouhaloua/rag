@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: tasks.py
-@Desc: Scheduler Tasks - 定时任务函数示例 - 定义可被调度器调用的任务函数
-"""
+
 """
 Scheduler Tasks - 定时任务函数示例
 定义可被调度器调用的任务函数

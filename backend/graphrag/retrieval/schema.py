@@ -21,7 +21,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     question: str
     model_name: Optional[str] = "qwen"
-    dataset_name: Optional[str] = None
+    file_id: Optional[str] = None
 
 
 class ChatMessageResponse(BaseModel):

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from graphrag.app.database import get_db, AsyncSessionLocal
+from app.database import get_db, AsyncSessionLocal
 from graphrag.retrieval.schema import (
     ChatConversationCreate,
     ChatMessageCreate,
@@ -17,7 +17,7 @@ from graphrag.retrieval.service import (
     ChatMessageService,
     ChatConversation,
 )
-from graphrag.rag.service import ask_question_service_stream
+from graphrag.rag.service import ask_file_question_stream
 
 router = APIRouter(prefix="/chat", tags=["聊天记录增删改查"])
 
@@ -60,47 +60,51 @@ async def _sse_stream_with_persistence(req: ChatRequest, conversation_id: str):
     reasoning_steps = []
     visualization_data = {}
 
-    async for raw_event in ask_question_service_stream(
-        req.dataset_name or "demo", req.question, req.user_id
-    ):
-        if raw_event.startswith("data: "):
-            try:
-                data = json.loads(raw_event[6:])
-                if data["type"] == "token":
-                    if data.get("phase") != "reasoning":
-                        answer_parts.append(data["text"])
-                elif data["type"] == "metadata":
-                    sub_questions = data.get("sub_questions", [])
-                    retrieved_triples = data.get("triples", [])
-                    retrieved_chunks = data.get("chunks", [])
-                elif data["type"] == "reasoning_steps":
-                    reasoning_steps = data.get("data", {}).get("reasoning_steps", [])
-                elif data["type"] == "visualization":
-                    visualization_data = data.get("data", {})
-                elif data["type"] == "done":
-                    full_answer = data.get("answer", "".join(answer_parts))
-                    ai_content = {
-                        "answer": full_answer,
-                        "sub_questions": sub_questions,
-                        "retrieved_triples": retrieved_triples,
-                        "retrieved_chunks": retrieved_chunks,
-                        "reasoning_steps": reasoning_steps,
-                        "visualization_data": visualization_data,
-                    }
-                    ai_msg = ChatMessageCreate(
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=json.dumps(ai_content, ensure_ascii=False),
-                        model_name=req.model_name,
-                    )
-                    async with AsyncSessionLocal() as sess:
-                        await ChatMessageService.create(sess, ai_msg)
-                    data["conversation_id"] = conversation_id
-                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-                    continue
-            except json.JSONDecodeError:
-                pass
-        yield raw_event
+    kb_session = AsyncSessionLocal()
+    try:
+        async for raw_event in ask_file_question_stream(
+            req.file_id, req.question, req.user_id, kb_session
+        ):
+            if raw_event.startswith("data: "):
+                try:
+                    data = json.loads(raw_event[6:])
+                    if data["type"] == "token":
+                        if data.get("phase") != "reasoning":
+                            answer_parts.append(data["text"])
+                    elif data["type"] == "metadata":
+                        sub_questions = data.get("sub_questions", [])
+                        retrieved_triples = data.get("triples", [])
+                        retrieved_chunks = data.get("chunks", [])
+                    elif data["type"] == "reasoning_steps":
+                        reasoning_steps = data.get("data", {}).get("reasoning_steps", [])
+                    elif data["type"] == "visualization":
+                        visualization_data = data.get("data", {})
+                    elif data["type"] == "done":
+                        full_answer = data.get("answer", "".join(answer_parts))
+                        ai_content = {
+                            "answer": full_answer,
+                            "sub_questions": sub_questions,
+                            "retrieved_triples": retrieved_triples,
+                            "retrieved_chunks": retrieved_chunks,
+                            "reasoning_steps": reasoning_steps,
+                            "visualization_data": visualization_data,
+                        }
+                        ai_msg = ChatMessageCreate(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content=json.dumps(ai_content, ensure_ascii=False),
+                            model_name=req.model_name,
+                        )
+                        async with AsyncSessionLocal() as sess:
+                            await ChatMessageService.create(sess, ai_msg)
+                        data["conversation_id"] = conversation_id
+                        yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                        continue
+                except json.JSONDecodeError:
+                    pass
+            yield raw_event
+    finally:
+        await kb_session.close()
 
 
 @router.post("/message/chat")

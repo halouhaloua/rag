@@ -1,12 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-@Author: 臧成龙
-@Contact: 939589097@qq.com
-@Time: 2025-12-31
-@File: auth_middleware.py
-@Desc: Auth Middleware - 全局认证和鉴权中间件 - 
-"""
+
 """
 Auth Middleware - 全局认证和鉴权中间件
 
