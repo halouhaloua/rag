@@ -13,7 +13,7 @@ import { getKnowledgeBaseDetailApi } from '#/api/core/rag';
 
 import FilesTab from './modules/files.vue';
 import GraphTab from './modules/graph.vue';
-import QaTab from './modules/qa.vue';
+import TripleTab from './modules/triple.vue';
 
 defineOptions({ name: 'KnowledgeBaseDetail' });
 
@@ -46,7 +46,7 @@ onMounted(async () => {
     <div v-else-if="kb" class="flex h-full flex-col">
       <div class="kb-header">
         <div class="kb-info">
-          <h2 class="kb-title">{{ kb.name }}</h2>
+          <h4 class="kb-title">{{ kb.name }}</h4>
           <p v-if="kb.description" class="kb-desc">{{ kb.description }}</p>
           <div class="kb-meta">
             <span>文件数: {{ kb.file_count }}</span>
@@ -70,8 +70,8 @@ onMounted(async () => {
         <ElTabPane label="知识图谱" name="graph">
           <GraphTab :kb-id="kb.id" />
         </ElTabPane>
-        <ElTabPane label="问答测试" name="qa">
-          <QaTab :kb-id="kb.id" />
+        <ElTabPane label="三元组管理" name="triple">
+          <TripleTab :kb-id="kb.id" />
         </ElTabPane>
       </ElTabs>
     </div>

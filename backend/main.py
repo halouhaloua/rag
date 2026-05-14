@@ -22,11 +22,11 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
     # 初始化演示知识库
-    try:
-        from scripts.seed_demo_kb import seed_demo_kb
-        await seed_demo_kb()
-    except Exception as e:
-        print(f"Warning: Failed to seed demo KB: {e}")
+    # try:
+    #     from scripts.seed_demo_kb import seed_demo_kb
+    #     await seed_demo_kb()
+    # except Exception as e:
+    #     print(f"Warning: Failed to seed demo KB: {e}")
     # 启动定时任务调度器 (APScheduler 4.x)
     if getattr(settings, 'ENABLE_SCHEDULER', True):
         from apscheduler import AsyncScheduler

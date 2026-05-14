@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router';
 import { Page } from '@vben/common-ui';
 import { Plus, Search } from '@vben/icons';
 
-import { ElButton, ElInput, ElMessage } from 'element-plus';
+import { ElButton, ElInput, ElMessage, ElPagination } from 'element-plus';
 
 import {
   createKnowledgeBaseApi,
@@ -28,6 +28,9 @@ const loading = ref(false);
 const descEditorRef = ref<InstanceType<typeof DescriptionEditor>>();
 const formDialogRef = ref<InstanceType<typeof KbFormDialog>>();
 
+const currentPage = ref(1);
+const pageSize = ref(12);
+
 const filteredKbs = computed(() => {
   if (!searchQuery.value.trim()) return kbs.value;
   const q = searchQuery.value.toLowerCase();
@@ -37,6 +40,22 @@ const filteredKbs = computed(() => {
       (kb.description || '').toLowerCase().includes(q),
   );
 });
+
+const paginatedKbs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredKbs.value.slice(start, start + pageSize.value);
+});
+
+const totalItems = computed(() => filteredKbs.value.length);
+
+function handlePageChange(page: number) {
+  currentPage.value = page;
+}
+
+function handleSearchInput(val: string) {
+  searchQuery.value = val;
+  currentPage.value = 1;
+}
 
 async function loadKbs() {
   loading.value = true;
@@ -100,6 +119,8 @@ onMounted(() => {
             clearable
             :prefix-icon="Search"
             style="width: 240px"
+            @input="handleSearchInput"
+            @update:model-value="handleSearchInput"
           />
           <ElButton type="primary" :icon="Plus" @click="handleCreate">
             新建知识库
@@ -108,7 +129,7 @@ onMounted(() => {
       </div>
 
       <div v-loading="loading" class="doc-grid">
-        <div v-if="filteredKbs.length === 0 && !loading" class="empty-state">
+        <div v-if="paginatedKbs.length === 0 && !loading" class="empty-state">
           <div
             style="
               padding: 60px 0;
@@ -142,7 +163,7 @@ onMounted(() => {
           </div>
         </div>
         <DocCard
-          v-for="kb in filteredKbs"
+          v-for="kb in paginatedKbs"
           :key="kb.id"
           :kb="kb"
           :description="kb.description || ''"
@@ -152,6 +173,17 @@ onMounted(() => {
           @view-graph="handleCardAction(kb)"
           @construct="handleCardAction(kb)"
           @upload-schema="handleCardAction(kb)"
+        />
+      </div>
+
+      <div v-if="totalItems > pageSize" class="pagination-footer">
+        <ElPagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="totalItems"
+          layout="total, prev, pager, next"
+          small
+          @current-change="handlePageChange"
         />
       </div>
     </div>
@@ -202,11 +234,18 @@ onMounted(() => {
 
 .doc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
 .empty-state {
   grid-column: 1 / -1;
+}
+
+.pagination-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
 }
 </style>

@@ -12,13 +12,7 @@ import { Page } from '@vben/common-ui';
 import { PanelLeft, PanelRight, Plus, Trash2 } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 
-import {
-  ElButton,
-  ElMessage,
-  ElMessageBox,
-  ElOption,
-  ElSelect,
-} from 'element-plus';
+import { ElButton, ElMessage, ElMessageBox } from 'element-plus';
 
 import {
   chatCompletionStream,
@@ -31,6 +25,7 @@ import {
   setIRCoTEnabledApi,
 } from '#/api/core/rag';
 import ChatArea from '#/components/rag/ChatArea.vue';
+import KbFileSelector from '#/components/rag/KbFileSelector.vue';
 
 defineOptions({ name: 'QAPage' });
 
@@ -49,8 +44,24 @@ const isStreaming = ref(false);
 const loadingConv = ref(false);
 const ircotEnabled = ref(false);
 const sidebarCollapsed = ref(false);
+const showSelector = ref(false);
 
 let msgCounter = 0;
+
+const selectedKbName = computed(
+  () => kbs.value.find((kb) => kb.id === selectedKbId.value)?.name || '',
+);
+
+const selectedFileName = computed(
+  () => files.value.find((file) => file.id === selectedFileId.value)?.filename || '',
+);
+
+const kbFileLabel = computed(() => {
+  if (selectedKbName.value && selectedFileName.value) {
+    return `${selectedKbName.value} / ${selectedFileName.value}`;
+  }
+  return '选择知识库 / 文件';
+});
 
 async function loadKbs() {
   const res = await getKnowledgeBaseListApi({ page: 1, pageSize: 200 });
@@ -83,7 +94,7 @@ async function loadHistory(convId: string) {
     const history = await getChatHistoryApi(convId);
     messages.value = history.map((m: any, i: number) => {
       const msg: ChatMessageItem = {
-        id: `hist_${i}`,
+        id: `hist_${convId}_${i}`,
         role: m.role,
         content: '',
         timestamp: new Date(m.sys_create_datetime).getTime(),
@@ -153,7 +164,7 @@ async function handleDeleteConversation(convId: string) {
 
 function addUserMessage(text: string) {
   messages.value.push(reactive({
-    id: `msg_${++msgCounter}`,
+    id: `session_${Date.now()}_${++msgCounter}`,
     role: 'user' as const,
     content: text,
     timestamp: Date.now(),
@@ -162,7 +173,7 @@ function addUserMessage(text: string) {
 
 function addAssistantMessage() {
   const msg = reactive({
-    id: `msg_${++msgCounter}`,
+    id: `session_${Date.now()}_${++msgCounter}`,
     role: 'assistant' as const,
     content: '',
     timestamp: Date.now(),
@@ -262,10 +273,11 @@ function handleIrcotToggle(v: boolean) {
   setIRCoTEnabledApi(v).catch(() => {});
 }
 
-watch(selectedKbId, (kbId) => {
-  selectedFileId.value = '';
-  loadFiles(kbId);
-});
+async function handleKbFileSelect(kbId: string, fileId: string) {
+  selectedKbId.value = kbId;
+  await loadFiles(kbId);
+  selectedFileId.value = fileId;
+}
 
 onMounted(() => {
   loadKbs();
@@ -281,12 +293,11 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <div class="qa-page">
-      <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <div v-if="!sidebarCollapsed" class="sidebar">
         <div class="sidebar-header">
-          <h3 v-show="!sidebarCollapsed">对话历史</h3>
+          <h3>对话历史</h3>
           <div class="sidebar-actions">
             <ElButton
-              v-show="!sidebarCollapsed"
               :icon="Plus"
               circle
               size="small"
@@ -300,7 +311,7 @@ onMounted(() => {
             />
           </div>
         </div>
-        <div v-show="!sidebarCollapsed" class="conv-list">
+        <div class="conv-list">
           <div
             v-for="conv in conversations"
             :key="conv.id"
@@ -328,53 +339,35 @@ onMounted(() => {
       </div>
 
       <div class="main-area">
-        <div class="qa-selector">
-          <div class="selector-item">
-            <span class="label">知识库：</span>
-            <ElSelect
-              v-model="selectedKbId"
-              placeholder="选择知识库"
-              style="width: 200px"
-              clearable
-            >
-              <ElOption
-                v-for="kb in kbs"
-                :key="kb.id"
-                :label="kb.name"
-                :value="kb.id"
-              />
-            </ElSelect>
-          </div>
-          <div class="selector-item">
-            <span class="label">文件：</span>
-            <ElSelect
-              v-model="selectedFileId"
-              placeholder="选择已构建图谱的文件"
-              style="width: 260px"
-              :disabled="!selectedKbId"
-            >
-              <ElOption
-                v-for="f in files"
-                :key="f.id"
-                :label="f.filename"
-                :value="f.id"
-              />
-            </ElSelect>
-          </div>
-        </div>
-
         <div class="qa-chat">
+          <ElButton
+            v-if="sidebarCollapsed"
+            class="sidebar-expand-button"
+            :icon="PanelRight"
+            circle
+            size="small"
+            @click="sidebarCollapsed = false"
+          />
           <ChatArea
             :messages="messages"
             :streaming="isStreaming"
             :ircot-enabled="ircotEnabled"
-            placeholder="输入您的问题..."
+            :kb-file-label="kbFileLabel"
+            :placeholder="selectedFileId ? '输入您的问题...' : '请先选择知识库和文件'"
+            @open-selector="showSelector = true"
             @send="handleSend"
             @ircot-toggle="handleIrcotToggle"
           />
         </div>
       </div>
     </div>
+    <KbFileSelector
+      v-model="showSelector"
+      :kbs="kbs"
+      :selected-kb-id="selectedKbId"
+      :selected-file-id="selectedFileId"
+      @select="handleKbFileSelect"
+    />
   </Page>
 </template>
 
@@ -396,21 +389,12 @@ onMounted(() => {
   transition: width 0.25s ease;
 }
 
-.sidebar.collapsed {
-  width: 48px;
-}
-
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.sidebar.collapsed .sidebar-header {
-  justify-content: center;
-  padding: 12px 8px;
 }
 
 .sidebar-actions {
@@ -483,36 +467,24 @@ onMounted(() => {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 12px;
   min-width: 0;
 }
 
-.qa-selector {
-  display: flex;
-  flex-shrink: 0;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--el-bg-color-overlay);
-  border-radius: 8px;
-}
-
-.selector-item {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.selector-item .label {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-}
-
 .qa-chat {
+  position: relative;
   flex: 1;
   min-height: 400px;
   overflow: hidden;
   background: var(--el-bg-color-overlay);
-  border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+}
+
+.sidebar-expand-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  box-shadow: 0 6px 16px rgb(15 23 42 / 10%);
 }
 </style>

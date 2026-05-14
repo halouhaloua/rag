@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
+from loguru import logger
 from sqlalchemy import select
 from app.base_model import generate_nanoid
 from graphrag.rag.model import KnowledgeBase, KnowledgeBaseFile, KnowledgeGraph
@@ -136,6 +136,7 @@ async def seed_demo_kb():
 
             await db.commit()
         except Exception as e:
+            logger.error(e)
             await db.rollback()
             raise
 

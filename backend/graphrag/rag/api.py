@@ -30,6 +30,11 @@ from graphrag.rag.schema import (
     ConstructGraphResponse,
     QuestionRequest,
     DeleteResponse,
+    GraphCategoryUpdate,
+    GraphNodesCreate,
+    GraphEdgesCreate,
+    GraphEdgeDeleteRequest,
+    GraphEdgeUpdateRequest,
 )
 from graphrag.rag.service import (
     GRAPHRAG_AVAILABLE,
@@ -37,6 +42,12 @@ from graphrag.rag.service import (
     construct_file_graph_service,
     ask_file_question_stream,
     get_file_graph_service,
+    update_node_category_service,
+    add_graph_edges_service,
+    add_graph_nodes_service,
+    delete_graph_node_service,
+    delete_graph_edge_service,
+    update_graph_edge_service,
 )
 from graphrag.rag.db_service import (
     KnowledgeBaseService,
@@ -186,66 +197,36 @@ async def upload_kb_files(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get(
-    "/knowledge-base/{kb_id}/files",
-    response_model=KnowledgeBaseFileListResponse,
-    summary="文件列表",
-)
-async def list_kb_files(kb_id: str, db: AsyncSession = Depends(get_db)):
-    kb = await KnowledgeBaseService.get_by_id(db, kb_id)
-    if not kb:
-        raise HTTPException(status_code=404, detail="知识库不存在")
-    files = await KnowledgeBaseFileService.get_files_by_kb(db, kb_id)
-    return KnowledgeBaseFileListResponse(items=files, total=len(files))
-
-
-@router.get(
-    "/knowledge-base/{kb_id}/files/{file_id}",
-    response_model=KnowledgeBaseFileResponse,
-    summary="文件详情",
-)
-async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
-    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
-    if not f or f.kb_id != kb_id:
-        raise HTTPException(status_code=404, detail="文件不存在")
-    return f
-
-
 @router.put(
-    "/knowledge-base/{kb_id}/files/{file_id}/schema",
-    summary="更新文件Schema",
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/edge",
+    summary="编辑单条边",
 )
-async def update_file_schema(
-    kb_id: str, file_id: str, data: FileSchemaUpdate, db: AsyncSession = Depends(get_db)
+async def update_graph_edge(
+    kb_id: str,
+    file_id: str,
+    data: GraphEdgeUpdateRequest,
+    db: AsyncSession = Depends(get_db),
 ):
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
-    f.schema_json = data.schema_definition
-    await db.flush()
-    return {"msg": "Schema更新成功"}
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await update_graph_edge_service(
+            file_id,
+            data.source, data.relation, data.target,
+            new_source=data.new_source,
+            new_relation=data.new_relation,
+            new_target=data.new_target,
+            new_source_category=data.new_source_category,
+            new_target_category=data.new_target_category,
+            db=db,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete(
-    "/knowledge-base/{kb_id}/files/{file_id}",
-    summary="删除文件",
-)
-async def delete_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
-    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
-    if not f or f.kb_id != kb_id:
-        raise HTTPException(status_code=404, detail="文件不存在")
-    from graphrag.rag.service import clear_cache_files
-    await clear_cache_files(kb_id, file_id)
-    await KnowledgeGraphService.delete_by_file(db, file_id)
-    success = await KnowledgeBaseFileService.delete(db, file_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="文件不存在")
-    return DeleteResponse(msg="文件删除成功")
-
-
-# ──────────────────────────────────────────────
-# Graph Construction
-# ──────────────────────────────────────────────
 @router.post(
     "/knowledge-base/{kb_id}/files/{file_id}/construct-graph",
     summary="构建文件图谱",
@@ -285,6 +266,114 @@ async def get_file_graph(kb_id: str, file_id: str, db: AsyncSession = Depends(ge
     if not f.has_graph:
         raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
     return await get_file_graph_service(file_id, db)
+
+
+# ──────────────────────────────────────────────
+# Triple Management
+# ──────────────────────────────────────────────
+@router.put(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/node/category",
+    summary="修改节点类别",
+)
+async def update_graph_node_category(
+    kb_id: str,
+    file_id: str,
+    data: GraphCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await update_node_category_service(file_id, data.node_name, data.new_category, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/edges",
+    summary="批量添加边",
+)
+async def add_graph_edges(
+    kb_id: str,
+    file_id: str,
+    data: GraphEdgesCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await add_graph_edges_service(file_id, [e.model_dump() for e in data.edges], db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/nodes",
+    summary="批量添加节点",
+)
+async def add_graph_nodes(
+    kb_id: str,
+    file_id: str,
+    data: GraphNodesCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await add_graph_nodes_service(file_id, [n.model_dump() for n in data.nodes], db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/nodes/{node_name}",
+    summary="删除节点（连带所有关联边）",
+)
+async def delete_graph_node(
+    kb_id: str,
+    file_id: str,
+    node_name: str,
+    db: AsyncSession = Depends(get_db),
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await delete_graph_node_service(file_id, node_name, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/edge",
+    summary="删除单条边",
+)
+async def delete_graph_edge(
+    kb_id: str,
+    file_id: str,
+    data: GraphEdgeDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    try:
+        return await delete_graph_edge_service(file_id, data.source, data.relation, data.target, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post(

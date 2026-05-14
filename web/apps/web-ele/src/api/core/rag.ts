@@ -452,6 +452,92 @@ export async function chatCompletionStream(
   });
 }
 
+// ─── Triple Management ───
+export async function updateNodeCategoryApi(
+  kbId: string,
+  fileId: string,
+  nodeName: string,
+  newCategory: string,
+) {
+  return requestClient.put<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/node/category`,
+    { node_name: nodeName, new_category: newCategory },
+  );
+}
+
+export async function addGraphEdgesApi(
+  kbId: string,
+  fileId: string,
+  edges: {
+    source: string;
+    relation: string;
+    target: string;
+    source_category?: string;
+    target_category?: string;
+  }[],
+) {
+  return requestClient.post<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/edges`,
+    { edges },
+  );
+}
+
+export async function addGraphNodesApi(
+  kbId: string,
+  fileId: string,
+  nodes: { name: string; category?: string }[],
+) {
+  return requestClient.post<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/nodes`,
+    { nodes },
+  );
+}
+
+export async function deleteGraphNodeApi(
+  kbId: string,
+  fileId: string,
+  nodeName: string,
+) {
+  return requestClient.delete<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/nodes/${encodeURIComponent(nodeName)}`,
+  );
+}
+
+export async function deleteGraphEdgeApi(
+  kbId: string,
+  fileId: string,
+  source: string,
+  relation: string,
+  target: string,
+) {
+  return requestClient.delete<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/edge`,
+    { data: { source, relation, target } },
+  );
+}
+
+export interface GraphEdgeUpdatePayload {
+  source: string;
+  relation: string;
+  target: string;
+  new_source?: string;
+  new_relation?: string;
+  new_target?: string;
+  new_source_category?: string;
+  new_target_category?: string;
+}
+
+export async function updateGraphEdgeApi(
+  kbId: string,
+  fileId: string,
+  data: GraphEdgeUpdatePayload,
+) {
+  return requestClient.put<GraphData>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/edge`,
+    data,
+  );
+}
+
 // ─── Status ───
 export async function getRagStatusApi() {
   return requestClient.get('/rag/api/status');

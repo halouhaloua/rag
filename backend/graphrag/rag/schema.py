@@ -113,3 +113,50 @@ class QuestionResponse(BaseModel):
 # ─── 删除响应 ───
 class DeleteResponse(BaseModel):
     msg: str = "删除成功"
+
+
+# ─── 三元组管理 ───
+class GraphNodeSpec(BaseModel):
+    name: str
+    category: str = "entity"
+    properties: Optional[Dict] = None
+
+
+class GraphEdgeSpec(BaseModel):
+    source: str
+    relation: str
+    target: str
+    source_category: str = "entity"
+    target_category: str = "entity"
+    source_properties: Optional[Dict] = None
+    target_properties: Optional[Dict] = None
+
+
+class GraphCategoryUpdate(BaseModel):
+    node_name: str
+    new_category: str
+
+
+class GraphNodesCreate(BaseModel):
+    nodes: List[GraphNodeSpec]
+
+
+class GraphEdgesCreate(BaseModel):
+    edges: List[GraphEdgeSpec]
+
+
+class GraphEdgeDeleteRequest(BaseModel):
+    source: str
+    relation: str
+    target: str
+
+
+class GraphEdgeUpdateRequest(BaseModel):
+    source: str
+    relation: str
+    target: str
+    new_source: Optional[str] = None
+    new_relation: Optional[str] = None
+    new_target: Optional[str] = None
+    new_source_category: Optional[str] = None
+    new_target_category: Optional[str] = None

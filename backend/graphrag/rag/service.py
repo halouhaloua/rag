@@ -701,3 +701,188 @@ def convert_standard_format(graph_data: Dict) -> Dict:
     return {"nodes": nodes, "links": edges, "categories": categories,
             "stats": {"total_nodes": len(nodes), "total_edges": len(edges),
                       "displayed_nodes": len(nodes), "displayed_edges": len(edges)}}
+
+
+# ─── Triple Management Helpers ───
+
+
+def _build_node_properties(name: str, category: str) -> dict:
+    props = {"name": name}
+    if category and category != "entity":
+        props["schema_type"] = category
+    return props
+
+
+def _make_triple(name_a: str, category_a: str, relation: str, name_b: str, category_b: str,
+                 props_a: Optional[dict] = None, props_b: Optional[dict] = None) -> dict:
+    return {
+        "start_node": {
+            "label": "attribute" if category_a == "attribute" else "entity",
+            "properties": props_a or _build_node_properties(name_a, category_a),
+        },
+        "relation": relation,
+        "end_node": {
+            "label": "attribute" if category_b == "attribute" else "entity",
+            "properties": props_b or _build_node_properties(name_b, category_b),
+        },
+    }
+
+
+def update_node_category(graph_data: list, node_name: str, category: str) -> list:
+    """Update schema_type for all triples containing node_name."""
+    for item in graph_data:
+        for key in ("start_node", "end_node"):
+            props = item.get(key, {}).get("properties", {})
+            if props.get("name") == node_name:
+                if category == "entity":
+                    props.pop("schema_type", None)
+                else:
+                    props["schema_type"] = category
+    return graph_data
+
+
+def add_graph_edges(graph_data: list, edges: list) -> list:
+    """Append new triples to graph_data."""
+    for edge in edges:
+        triple = _make_triple(
+            edge["source"], edge.get("source_category", "entity"),
+            edge["relation"],
+            edge["target"], edge.get("target_category", "entity"),
+            edge.get("source_properties"), edge.get("target_properties"),
+        )
+        graph_data.append(triple)
+    return graph_data
+
+
+def add_graph_nodes(graph_data: list, nodes: list) -> list:
+    """Append self-referencing triples so nodes appear in visualization."""
+    for node in nodes:
+        triple = _make_triple(
+            node["name"], node.get("category", "entity"), "self",
+            node["name"], node.get("category", "entity"),
+            node.get("properties"), node.get("properties"),
+        )
+        graph_data.append(triple)
+    return graph_data
+
+
+def delete_graph_node(graph_data: list, node_name: str) -> list:
+    """Remove all triples referencing node_name."""
+    return [
+        item for item in graph_data
+        if not (
+            item.get("start_node", {}).get("properties", {}).get("name") == node_name
+            or item.get("end_node", {}).get("properties", {}).get("name") == node_name
+        )
+    ]
+
+
+def delete_graph_edge(graph_data: list, source: str, relation: str, target: str) -> list:
+    """Remove the first matching triple."""
+    for i, item in enumerate(graph_data):
+        if (item.get("start_node", {}).get("properties", {}).get("name") == source
+                and item.get("relation") == relation
+                and item.get("end_node", {}).get("properties", {}).get("name") == target):
+            graph_data.pop(i)
+            break
+    return graph_data
+
+
+def update_graph_edge(graph_data: list, source: str, relation: str, target: str,
+                      new_source: Optional[str] = None, new_relation: Optional[str] = None,
+                      new_target: Optional[str] = None,
+                      new_source_category: Optional[str] = None,
+                      new_target_category: Optional[str] = None) -> list:
+    """Update the first matching triple's fields."""
+    for item in graph_data:
+        sp = item.get("start_node", {}).get("properties", {})
+        ep = item.get("end_node", {}).get("properties", {})
+        if sp.get("name") == source and item.get("relation") == relation and ep.get("name") == target:
+            if new_source is not None:
+                sp["name"] = new_source
+            if new_relation is not None:
+                item["relation"] = new_relation
+            if new_target is not None:
+                ep["name"] = new_target
+            if new_source_category is not None:
+                if new_source_category == "entity":
+                    sp.pop("schema_type", None)
+                else:
+                    sp["schema_type"] = new_source_category
+                item["start_node"]["label"] = "attribute" if new_source_category == "attribute" else "entity"
+            if new_target_category is not None:
+                if new_target_category == "entity":
+                    ep.pop("schema_type", None)
+                else:
+                    ep["schema_type"] = new_target_category
+                item["end_node"]["label"] = "attribute" if new_target_category == "attribute" else "entity"
+            break
+    return graph_data
+
+
+# ─── Triple Management Async Services ───
+
+
+async def update_node_category_service(file_id: str, node_name: str, new_category: str, db: AsyncSession) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = update_node_category(list(graph_record.graph_data), node_name, new_category)
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)
+
+
+async def add_graph_edges_service(file_id: str, edges: List[Dict], db: AsyncSession) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = add_graph_edges(list(graph_record.graph_data), edges)
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)
+
+
+async def add_graph_nodes_service(file_id: str, nodes: List[Dict], db: AsyncSession) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = add_graph_nodes(list(graph_record.graph_data), nodes)
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)
+
+
+async def delete_graph_node_service(file_id: str, node_name: str, db: AsyncSession) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = delete_graph_node(list(graph_record.graph_data), node_name)
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)
+
+
+async def delete_graph_edge_service(file_id: str, source: str, relation: str, target: str, db: AsyncSession) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = delete_graph_edge(list(graph_record.graph_data), source, relation, target)
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)
+
+
+async def update_graph_edge_service(file_id: str, source: str, relation: str, target: str,
+                                    new_source: Optional[str] = None,
+                                    new_relation: Optional[str] = None,
+                                    new_target: Optional[str] = None,
+                                    new_source_category: Optional[str] = None,
+                                    new_target_category: Optional[str] = None,
+                                    db: AsyncSession = None) -> Dict:
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        raise Exception("Graph not found")
+    graph_record.graph_data = update_graph_edge(
+        list(graph_record.graph_data),
+        source, relation, target,
+        new_source, new_relation, new_target,
+        new_source_category, new_target_category,
+    )
+    await db.commit()
+    return await prepare_graph_visualization_from_data(graph_record.graph_data)

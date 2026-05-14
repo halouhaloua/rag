@@ -4,8 +4,10 @@ import type { ChatMessageItem } from '#/composables/useChat';
 import { nextTick, ref, watch } from 'vue';
 
 import { ElButton, ElInput, ElSwitch, ElTag } from 'element-plus';
+import { marked } from 'marked';
 
 const props = defineProps<{
+  kbFileLabel?: string;
   ircotEnabled?: boolean;
   loading?: boolean;
   messages: ChatMessageItem[];
@@ -15,21 +17,23 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   ircotToggle: [enabled: boolean];
+  openSelector: [];
   send: [question: string];
 }>();
 
 const inputText = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
-const collapsedSteps = ref<Set<number>>(new Set());
+const collapsedSteps = ref<Set<string>>(new Set());
 const triplesExpanded = ref<Set<string>>(new Set());
 const chunksExpanded = ref<Set<string>>(new Set());
 const CHUNK_PREVIEW_LENGTH = 80;
 
-function toggleCollapseStep(idx: number) {
-  if (collapsedSteps.value.has(idx)) {
-    collapsedSteps.value.delete(idx);
+function toggleCollapseStep(id: string, idx: number) {
+  const key = `${id}-${idx}`;
+  if (collapsedSteps.value.has(key)) {
+    collapsedSteps.value.delete(key);
   } else {
-    collapsedSteps.value.add(idx);
+    collapsedSteps.value.add(key);
   }
 }
 
@@ -64,16 +68,16 @@ function handleSend() {
   emit('send', text);
 }
 
+function renderMarkdown(content: string): string {
+  if (!content) return '';
+  return marked.parse(content, { breaks: true }) as string;
+}
+
 function onKeydown(e: Event) {
   const ke = e as KeyboardEvent;
   if (ke.ctrlKey && ke.key === 'Enter') {
     handleSend();
   }
-}
-
-function formatTime(timestamp: number): string {
-  const d = new Date(timestamp);
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 watch(() => props.messages.length, scrollToBottom);
@@ -130,40 +134,17 @@ watch(
         class="message-row"
         :class="msg.role"
       >
-        <div class="avatar">
-          <svg
-            v-if="msg.role === 'user'"
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-          <svg
-            v-else
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </div>
-        <div class="message-content">
-          <div class="bubble">
+        <template v-if="msg.role === 'user'">
+          <div class="message-content">
+            <div class="bubble user-bubble">
+              <div class="text">{{ msg.content }}</div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="message-content">
             <div
-              v-if="
-                msg.role === 'assistant' &&
-                msg.subQuestions &&
-                msg.subQuestions.length > 0
-              "
+              v-if="msg.subQuestions && msg.subQuestions.length > 0"
               class="metadata-summary"
             >
               <el-tag size="small" type="info">
@@ -177,14 +158,14 @@ watch(
               </el-tag>
             </div>
 
-            <template v-if="msg.role === 'assistant' && msg.reasoningSteps">
+            <template v-if="msg.reasoningSteps">
               <div class="reasoning-section">
                 <div
                   v-for="(step, si) in msg.reasoningSteps.reasoning_steps"
                   :key="`step-${msg.id}-${si}`"
                   class="step-card"
                 >
-                  <div class="step-header" @click="toggleCollapseStep(si)">
+                  <div class="step-header" @click="toggleCollapseStep(msg.id, si)">
                     <span class="step-icon">
                       <svg
                         v-if="step.type === 'sub_question'"
@@ -216,7 +197,7 @@ watch(
                     </span>
                     <span class="step-toggle">
                       <svg
-                        :class="{ rotated: !collapsedSteps.has(si) }"
+                        :class="{ rotated: !collapsedSteps.has(`${msg.id}-${si}`) }"
                         width="12"
                         height="12"
                         viewBox="0 0 24 24"
@@ -228,7 +209,7 @@ watch(
                       </svg>
                     </span>
                   </div>
-                  <div v-if="!collapsedSteps.has(si)" class="step-body">
+                  <div v-if="!collapsedSteps.has(`${msg.id}-${si}`)" class="step-body">
                     <div
                       v-if="step.triples && step.triples.length > 0"
                       class="step-section"
@@ -243,11 +224,12 @@ watch(
                       </div>
                       <el-button
                         v-if="step.triples.length > 3"
+                        class="toggle-inline-button"
+                        :class="{ expanded: triplesExpanded.has(`${msg.id}-${si}`) }"
                         size="small"
-                        link
                         @click="toggleTriples(`${msg.id}-${si}`)"
                       >
-                        {{ triplesExpanded.has(`${msg.id}-${si}`) ? '收起' : `展开全部 ${step.triples.length} 条三元组` }}
+                        {{ triplesExpanded.has(`${msg.id}-${si}`) ? '收起' : '展开三元组' }}
                       </el-button>
                     </div>
                     <div
@@ -271,11 +253,12 @@ watch(
                       </template>
                       <el-button
                         v-if="step.chunk_contents.length > 1 || (step.chunk_contents[0] && step.chunk_contents[0].length > CHUNK_PREVIEW_LENGTH)"
+                        class="toggle-inline-button"
+                        :class="{ expanded: chunksExpanded.has(`${msg.id}-${si}`) }"
                         size="small"
-                        link
                         @click="toggleChunks(`${msg.id}-${si}`)"
                       >
-                        {{ chunksExpanded.has(`${msg.id}-${si}`) ? '收起' : `展开全部 ${step.chunk_contents.length} 条文本块` }}
+                        {{ chunksExpanded.has(`${msg.id}-${si}`) ? '收起' : '展开文本块' }}
                       </el-button>
                     </div>
                     <div v-if="step.thought" class="step-section">
@@ -287,10 +270,9 @@ watch(
               </div>
             </template>
 
-            <div class="text">{{ msg.content }}</div>
+            <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
           </div>
-          <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
-        </div>
+        </template>
       </div>
       <div v-if="streaming" class="streaming-indicator">
         <span class="dot-pulse"></span>
@@ -299,33 +281,53 @@ watch(
     </div>
 
     <div class="input-area">
-      <div class="input-controls">
-        <el-switch
-          v-if="ircotEnabled !== undefined"
-          :model-value="ircotEnabled"
-          size="small"
-          active-text="IRCoT"
-          @update:model-value="(v: string | number | boolean) => emit('ircotToggle', !!v)"
-        />
-      </div>
-      <div class="input-row">
+      <div class="input-shell">
         <el-input
           v-model="inputText"
-          :placeholder="placeholder || '输入您的问题 (Ctrl+Enter 发送)'"
+          :placeholder="placeholder || '输入您的问题，Ctrl+Enter 发送'"
           :disabled="streaming"
           type="textarea"
           :rows="2"
           resize="none"
           @keydown="onKeydown"
         />
-        <el-button
-          type="primary"
-          :loading="streaming"
-          :disabled="!inputText.trim()"
-          @click="handleSend"
-        >
-          {{ streaming ? '生成中' : '发送' }}
-        </el-button>
+        <div class="input-footer">
+          <div class="footer-actions">
+            <el-button class="selector-button" @click="emit('openSelector')">
+              <span class="selector-button-label">{{ kbFileLabel || '选择知识库 / 文件' }}</span>
+            </el-button>
+            <el-button
+              v-if="ircotEnabled !== undefined"
+              class="mode-button"
+              :class="{ active: ircotEnabled }"
+              @click="emit('ircotToggle', !ircotEnabled)"
+            >
+              IRCoT
+            </el-button>
+          </div>
+          <el-button
+            type="primary"
+            circle
+            class="send-button"
+            :loading="streaming"
+            :disabled="!inputText.trim()"
+            @click="handleSend"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M22 2 11 13" />
+              <path d="M22 2 15 22 11 13 2 9 22 2z" />
+            </svg>
+          </el-button>
+        </div>
       </div>
     </div>
     <div class="disclaimer">AI 生成内容仅供参考，可能不准确。</div>
@@ -342,7 +344,7 @@ watch(
 
 .messages-container {
   flex: 1;
-  padding: 16px;
+  padding: 16px 10%;
   overflow-y: auto;
 }
 
@@ -370,51 +372,140 @@ watch(
 
 .message-row {
   display: flex;
-  gap: 10px;
   margin-bottom: 16px;
 }
 
 .message-row.user {
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
-.avatar {
-  flex-shrink: 0;
-  font-size: 28px;
+.message-content {
+  min-width: 0;
+}
+
+.user .message-content {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .bubble {
-  max-width: 75%;
-  padding: 10px 14px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 16px;
   font-size: 14px;
   line-height: 1.6;
   background: var(--el-fill-color-light);
   border-radius: 12px;
 }
 
-.user .bubble {
+.user-bubble {
   background: var(--el-color-primary-light-8);
   border-bottom-right-radius: 4px;
+  margin-left: auto;
+  max-width: min(80%, 100%);
 }
 
-.assistant .bubble {
-  border-bottom-left-radius: 4px;
+.assistant .message-content {
+  padding: 4px 0;
 }
 
 .text {
+  max-width: 100%;
   overflow-wrap: break-word;
+  word-break: normal;
   white-space: pre-wrap;
 }
 
-.message-time {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
+.md-content {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: break-word;
 }
 
-.user .message-time {
-  text-align: right;
+.md-content :deep(p) {
+  margin: 0.5em 0;
 }
+
+.md-content :deep(pre) {
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--el-fill-color-lighter);
+  border-radius: 8px;
+}
+
+.md-content :deep(code) {
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 13px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+}
+
+.md-content :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.md-content :deep(ul),
+.md-content :deep(ol) {
+  padding-left: 20px;
+  margin: 0.5em 0;
+}
+
+.md-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.md-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 4px 12px;
+  color: var(--el-text-color-secondary);
+  border-left: 3px solid var(--el-border-color);
+}
+
+.md-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.md-content :deep(th),
+.md-content :deep(td) {
+  padding: 6px 12px;
+  text-align: left;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.md-content :deep(th) {
+  font-weight: 600;
+  background: var(--el-fill-color-lighter);
+}
+
+.md-content :deep(a) {
+  color: var(--el-color-primary);
+}
+
+.md-content :deep(strong) {
+  font-weight: 600;
+}
+
+.md-content :deep(h1),
+.md-content :deep(h2),
+.md-content :deep(h3) {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+}
+
+.md-content :deep(h1) { font-size: 1.3em; }
+.md-content :deep(h2) { font-size: 1.15em; }
+.md-content :deep(h3) { font-size: 1.05em; }
 
 .metadata-summary {
   display: flex;
@@ -428,17 +519,18 @@ watch(
 }
 
 .step-card {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
 .step-header {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 10px 14px;
   font-size: 13px;
   cursor: pointer;
   background: var(--el-fill-color-lighter);
@@ -452,10 +544,16 @@ watch(
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
   white-space: nowrap;
 }
 
 .step-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   font-size: 10px;
   color: var(--el-text-color-secondary);
   transition: transform 0.2s;
@@ -466,11 +564,14 @@ watch(
 }
 
 .step-body {
-  padding: 8px 10px;
+  padding: 12px 14px 10px;
   font-size: 12px;
 }
 
 .step-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 8px;
 }
 
@@ -483,32 +584,36 @@ watch(
 }
 
 .triple-item {
-  padding: 2px 6px;
-  margin-bottom: 2px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   background: var(--el-fill-color-lighter);
+  border-left: 3px solid var(--el-color-primary-light-5);
   border-radius: 4px;
 }
 
 .chunk-item {
-  padding: 4px 6px;
-  margin-bottom: 2px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.5;
   background: var(--el-fill-color-lighter);
+  border-left: 3px solid var(--el-color-success-light-5);
   border-radius: 4px;
 }
 
 .chunk-item-preview {
-  padding: 4px 6px;
+  padding: 8px 10px;
   margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
   background: var(--el-fill-color-lighter);
+  border-left: 3px solid var(--el-color-success-light-5);
   border-radius: 4px;
 }
 
@@ -518,6 +623,25 @@ watch(
   font-style: italic;
   background: var(--el-color-warning-light-9);
   border-radius: 4px;
+}
+
+button.toggle-inline-button {
+  min-width: 104px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  margin-top: 4px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 999px;
+}
+
+button.toggle-inline-button.expanded {
+  max-width: 80%;
+}
+
+button.toggle-inline-button:hover {
+  background: var(--el-color-primary-light-8);
 }
 
 .streaming-indicator {
@@ -549,30 +673,116 @@ watch(
 }
 
 .disclaimer {
-  padding: 4px 16px 8px;
+  width: 80%;
+  margin: 0 auto;
+  padding: 4px 0 8px;
   font-size: 11px;
   color: var(--el-text-color-placeholder);
   text-align: center;
 }
 
 .input-area {
-  padding: 12px 16px 4px;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
   background: var(--el-bg-color-overlay);
-  border-top: 1px solid var(--el-border-color-lighter);
 }
 
-.input-controls {
+.input-shell {
+  width: 80%;
+  max-width: 80%;
+  padding: 8px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 6%);
+}
+
+.input-shell :deep(.el-textarea__inner) {
+  min-height: 48px !important;
+  max-height: 120px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.input-shell :deep(.el-textarea__inner:focus) {
+  box-shadow: none;
+}
+
+.input-footer {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
 }
 
-.input-row {
+.footer-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
 }
 
-.input-row .el-input {
-  flex: 1;
+.selector-button,
+.mode-button {
+  height: 36px;
+  padding: 0 14px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border-color: transparent;
+  border-radius: 999px;
+}
+
+.selector-button {
+  max-width: 320px;
+}
+
+.selector-button-label {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-button.active {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+}
+
+.send-button {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.selector-button,
+.mode-button {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border-color: transparent;
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .input-footer {
+    align-items: stretch;
+  }
+
+  .footer-actions {
+    flex: 1;
+  }
+
+  .selector-button {
+    max-width: none;
+    flex: 1;
+  }
 }
 </style>

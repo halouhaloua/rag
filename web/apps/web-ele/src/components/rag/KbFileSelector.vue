@@ -73,9 +73,10 @@ function handleCancel() {
 
 <template>
   <ElDialog
+    class="kb-file-selector-dialog"
     :model-value="modelValue"
     title="选择知识库和文件"
-    width="660px"
+    width="760px"
     @close="handleCancel"
   >
     <div class="selector-body">
@@ -130,6 +131,22 @@ function handleCancel() {
 </template>
 
 <style scoped>
+.kb-file-selector-dialog :deep(.el-dialog) {
+  border-radius: 24px;
+}
+
+.kb-file-selector-dialog :deep(.el-dialog__header) {
+  padding: 22px 24px 10px;
+}
+
+.kb-file-selector-dialog :deep(.el-dialog__body) {
+  padding: 8px 24px 18px;
+}
+
+.kb-file-selector-dialog :deep(.el-dialog__footer) {
+  padding: 0 24px 24px;
+}
+
 .selector-body {
   display: flex;
   gap: 16px;
@@ -154,7 +171,7 @@ function handleCancel() {
   flex: 1;
   overflow-y: auto;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 18px;
 }
 
 .col-item {

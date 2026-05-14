@@ -836,6 +836,9 @@ importers:
       jspdf:
         specifier: ^3.0.4
         version: 3.0.4
+      marked:
+        specifier: ^17.0.1
+        version: 17.0.1
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1

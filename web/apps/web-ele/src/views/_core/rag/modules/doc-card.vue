@@ -183,10 +183,10 @@ function handleCommand(command: string) {
           <FileText style="width: 14px; height: 14px" />
           文件: {{ kb.file_count }}
         </span>
-        <span class="footer-item">
+        <!-- <span class="footer-item">
           <List style="width: 14px; height: 14px" />
           分段: {{ kb.file_count * 3 }}
-        </span>
+        </span> -->
       </div>
       <div class="footer-right">
         <span class="footer-item time">
@@ -206,7 +206,7 @@ function handleCommand(command: string) {
   padding: 16px 20px;
   cursor: pointer;
   background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
+  /* border: 1px solid var(--el-border-color-lighter); */
   border-radius: 12px;
   transition: all 0.25s ease;
 }

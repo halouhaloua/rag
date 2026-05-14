@@ -10,7 +10,7 @@
   "createKb": "Create Knowledge Base",
   "editKb": "Edit Knowledge Base",
   "deleteKb": "Delete Knowledge Base",
-  "deleteConfirm": "Are you sure to delete "{name}"? This action cannot be undone.",
+  "deleteConfirm": "Are you sure to delete \"{name}\"? This action cannot be undone.",
   "uploadFile": "Upload Files",
   "buildGraph": "Build Graph",
   "rebuildGraph": "Rebuild Graph",
@@ -33,7 +33,7 @@
   "selectKb": "Select Knowledge Base",
   "selectGraphFile": "Select a file with graph built",
   "noGraphFiles": "No files with graph built yet",
-  "deleteFileConfirm": "Are you sure to delete "{name}"? The graph will be deleted too.",
+  "deleteFileConfirm": "Are you sure to delete \"{name}\"? The graph will be deleted too.",
   "deleteConversation": "Delete this conversation?",
   "kbNamePlaceholder": "e.g. High School Math",
   "kbDescPlaceholder": "Optional description",
@@ -46,7 +46,7 @@
   "dragHint": "Drag files here or click to select",
   "supportedFormats": "Supported: TXT, PDF, DOC, DOCX, CSV, XLS, XLSX, MD",
   "schemaFile": "Schema File (optional)",
-  "schemaJsonHint": "JSON format: {"Nodes":[], "Relations":[], "Attributes":[]}",
+  "schemaJsonHint": "JSON format: {\"Nodes\":[], \"Relations\":[], \"Attributes\":[]}",
   "importJsonFile": "Import JSON file",
   "nodeSearch": "Search nodes..."
 }
