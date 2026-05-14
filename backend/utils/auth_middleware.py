@@ -39,6 +39,7 @@ OAUTH_WHITE_LIST_PATTERNS = [
 # WebSocket白名单正则模式（WebSocket自己处理Token认证）
 WEBSOCKET_WHITE_LIST_PATTERNS = [
     r"^/ws/.*",  # 所有WebSocket路径
+    r"^/rag/api/ws/.*",  # GraphRAG WebSocket路径
 ]
 
 # 白名单正则模式（支持通配符）

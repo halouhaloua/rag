@@ -6,7 +6,6 @@ from typing import Dict, List, Set, Tuple
 import faiss
 import networkx as nx
 import torch
-from sentence_transformers import SentenceTransformer
 
 from graphrag.models.retriever import utils as retriever_utils
 from graphrag.utils.logger import logger

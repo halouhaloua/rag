@@ -3,6 +3,8 @@ import type { ChatMessageItem } from '#/composables/useChat';
 
 import { nextTick, ref, watch } from 'vue';
 
+import { ElButton, ElInput, ElSwitch, ElTag } from 'element-plus';
+
 const props = defineProps<{
   ircotEnabled?: boolean;
   loading?: boolean;
@@ -18,14 +20,41 @@ const emit = defineEmits<{
 
 const inputText = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
-const expandedSteps = ref<Set<number>>(new Set());
+const collapsedSteps = ref<Set<number>>(new Set());
+const triplesExpanded = ref<Set<string>>(new Set());
+const chunksExpanded = ref<Set<string>>(new Set());
+const CHUNK_PREVIEW_LENGTH = 80;
 
-function toggleStep(idx: number) {
-  if (expandedSteps.value.has(idx)) {
-    expandedSteps.value.delete(idx);
+function toggleCollapseStep(idx: number) {
+  if (collapsedSteps.value.has(idx)) {
+    collapsedSteps.value.delete(idx);
   } else {
-    expandedSteps.value.add(idx);
+    collapsedSteps.value.add(idx);
   }
+}
+
+function toggleTriples(key: string) {
+  if (triplesExpanded.value.has(key)) {
+    triplesExpanded.value.delete(key);
+  } else {
+    triplesExpanded.value.add(key);
+  }
+}
+
+function toggleChunks(key: string) {
+  if (chunksExpanded.value.has(key)) {
+    chunksExpanded.value.delete(key);
+  } else {
+    chunksExpanded.value.add(key);
+  }
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    }
+  });
 }
 
 function handleSend() {
@@ -35,8 +64,9 @@ function handleSend() {
   emit('send', text);
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.ctrlKey && e.key === 'Enter') {
+function onKeydown(e: Event) {
+  const ke = e as KeyboardEvent;
+  if (ke.ctrlKey && ke.key === 'Enter') {
     handleSend();
   }
 }
@@ -46,16 +76,14 @@ function formatTime(timestamp: number): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
+watch(() => props.messages.length, scrollToBottom);
+
 watch(
-  () => props.messages.length,
   () => {
-    nextTick(() => {
-      if (messagesContainer.value) {
-        messagesContainer.value.scrollTop =
-          messagesContainer.value.scrollHeight;
-      }
-    });
+    if (props.messages.length === 0) return '';
+    return props.messages[props.messages.length - 1]?.content ?? '';
   },
+  scrollToBottom,
 );
 </script>
 
@@ -148,96 +176,120 @@ watch(
                 {{ msg.retrievedChunks?.length || 0 }} 文本块
               </el-tag>
             </div>
-            <div class="text">{{ msg.content }}</div>
-          </div>
-          <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
 
-          <template v-if="msg.role === 'assistant' && msg.reasoningSteps">
-            <div class="reasoning-section">
-              <div
-                v-for="(step, si) in msg.reasoningSteps.reasoning_steps"
-                :key="`step-${msg.id}-${si}`"
-                class="step-card"
-              >
-                <div class="step-header" @click="toggleStep(si)">
-                  <span class="step-icon">
-                    <svg
-                      v-if="step.type === 'sub_question'"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="m21 21-4.3-4.3" />
-                    </svg>
-                    <svg
-                      v-else
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                      <path d="M21 3v5h-5" />
-                    </svg>
-                  </span>
-                  <span class="step-title">
-                    {{ step.question || step.type }}
-                  </span>
-                  <span class="step-toggle">
-                    <svg
-                      :class="{ rotated: expandedSteps.has(si) }"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </span>
-                </div>
-                <div v-if="expandedSteps.has(si)" class="step-body">
-                  <div
-                    v-if="step.triples && step.triples.length > 0"
-                    class="step-section"
-                  >
-                    <div class="step-section-title">三元组</div>
-                    <div
-                      v-for="(t, ti) in step.triples"
-                      :key="ti"
-                      class="triple-item"
-                    >
-                      {{ t }}
-                    </div>
+            <template v-if="msg.role === 'assistant' && msg.reasoningSteps">
+              <div class="reasoning-section">
+                <div
+                  v-for="(step, si) in msg.reasoningSteps.reasoning_steps"
+                  :key="`step-${msg.id}-${si}`"
+                  class="step-card"
+                >
+                  <div class="step-header" @click="toggleCollapseStep(si)">
+                    <span class="step-icon">
+                      <svg
+                        v-if="step.type === 'sub_question'"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                      </svg>
+                      <svg
+                        v-else
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        <path d="M21 3v5h-5" />
+                      </svg>
+                    </span>
+                    <span class="step-title">
+                      {{ step.question || step.type }}
+                    </span>
+                    <span class="step-toggle">
+                      <svg
+                        :class="{ rotated: !collapsedSteps.has(si) }"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </span>
                   </div>
-                  <div
-                    v-if="step.chunk_contents && step.chunk_contents.length > 0"
-                    class="step-section"
-                  >
-                    <div class="step-section-title">文本块</div>
+                  <div v-if="!collapsedSteps.has(si)" class="step-body">
                     <div
-                      v-for="(ch, ci) in step.chunk_contents"
-                      :key="ci"
-                      class="chunk-item"
+                      v-if="step.triples && step.triples.length > 0"
+                      class="step-section"
                     >
-                      {{ ch }}
+                      <div class="step-section-title">三元组</div>
+                      <div
+                        v-for="(t, ti) in (triplesExpanded.has(`${msg.id}-${si}`) ? step.triples : step.triples.slice(0, 3))"
+                        :key="ti"
+                        class="triple-item"
+                      >
+                        {{ t }}
+                      </div>
+                      <el-button
+                        v-if="step.triples.length > 3"
+                        size="small"
+                        link
+                        @click="toggleTriples(`${msg.id}-${si}`)"
+                      >
+                        {{ triplesExpanded.has(`${msg.id}-${si}`) ? '收起' : `展开全部 ${step.triples.length} 条三元组` }}
+                      </el-button>
                     </div>
-                  </div>
-                  <div v-if="step.thought" class="step-section">
-                    <div class="step-section-title">推理</div>
-                    <div class="thought-text">{{ step.thought }}</div>
+                    <div
+                      v-if="step.chunk_contents && step.chunk_contents.length > 0"
+                      class="step-section"
+                    >
+                      <div class="step-section-title">文本块</div>
+                      <template v-if="chunksExpanded.has(`${msg.id}-${si}`)">
+                        <div
+                          v-for="(ch, ci) in step.chunk_contents"
+                          :key="ci"
+                          class="chunk-item"
+                        >
+                          {{ ch }}
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="chunk-item-preview">
+                          {{ step.chunk_contents[0].slice(0, CHUNK_PREVIEW_LENGTH) }}{{ step.chunk_contents[0].length > CHUNK_PREVIEW_LENGTH ? '...' : '' }}
+                        </div>
+                      </template>
+                      <el-button
+                        v-if="step.chunk_contents.length > 1 || (step.chunk_contents[0] && step.chunk_contents[0].length > CHUNK_PREVIEW_LENGTH)"
+                        size="small"
+                        link
+                        @click="toggleChunks(`${msg.id}-${si}`)"
+                      >
+                        {{ chunksExpanded.has(`${msg.id}-${si}`) ? '收起' : `展开全部 ${step.chunk_contents.length} 条文本块` }}
+                      </el-button>
+                    </div>
+                    <div v-if="step.thought" class="step-section">
+                      <div class="step-section-title">推理</div>
+                      <div class="thought-text">{{ step.thought }}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </template>
+            </template>
+
+            <div class="text">{{ msg.content }}</div>
+          </div>
+          <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
         </div>
       </div>
       <div v-if="streaming" class="streaming-indicator">
@@ -253,7 +305,7 @@ watch(
           :model-value="ircotEnabled"
           size="small"
           active-text="IRCoT"
-          @update:model-value="(v: boolean) => emit('ircotToggle', v)"
+          @update:model-value="(v: string | number | boolean) => emit('ircotToggle', !!v)"
         />
       </div>
       <div class="input-row">
@@ -350,7 +402,7 @@ watch(
 }
 
 .text {
-  word-break: break-word;
+  overflow-wrap: break-word;
   white-space: pre-wrap;
 }
 
@@ -372,7 +424,7 @@ watch(
 }
 
 .reasoning-section {
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .step-card {
@@ -440,11 +492,22 @@ watch(
 }
 
 .chunk-item {
-  max-height: 60px;
   padding: 4px 6px;
   margin-bottom: 2px;
   overflow: hidden;
   font-size: 11px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+}
+
+.chunk-item-preview {
+  padding: 4px 6px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
   background: var(--el-fill-color-lighter);
   border-radius: 4px;
 }

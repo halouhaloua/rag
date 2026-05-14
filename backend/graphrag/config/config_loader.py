@@ -4,7 +4,7 @@ Handles loading, validation, and access to configuration parameters.
 """
 
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -12,10 +12,21 @@ from graphrag.config.prompts import prompts
 from graphrag.utils.logger import logger
 
 
+_embedding_model_instance = None
+
+
 def _get_embedding_model():
+    global _embedding_model_instance
+    if _embedding_model_instance is not None:
+        return _embedding_model_instance
     from sentence_transformers import SentenceTransformer
     model_path = Path(__file__).parent.parent.parent / "dir"
-    return SentenceTransformer(str(model_path))
+    _embedding_model_instance = SentenceTransformer(str(model_path))
+    return _embedding_model_instance
+
+
+# Eager load at module import
+_get_embedding_model()
 
 
 file_path = Path(__file__).parent.parent
@@ -39,7 +50,7 @@ class TriggersConfig:
 class ConstructionConfig:
     mode: str = "agent"
     max_workers: int = 5
-    datasets_no_chunk: list = None
+    datasets_no_chunk: list = field(default_factory=list)
     chunk_size: int = 1000
     overlap: int = 50
 
@@ -91,7 +102,6 @@ class RetrievalConfig:
 @dataclass
 class EmbeddingsConfig:
     device: str = "cuda"
-
     def get_model(self):
         return _get_embedding_model()
     batch_size: int = 32

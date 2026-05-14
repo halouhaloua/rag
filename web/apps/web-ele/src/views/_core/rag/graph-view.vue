@@ -154,8 +154,8 @@ onMounted(() => {
 
 .graph-wrapper {
   position: relative;
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);

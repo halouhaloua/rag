@@ -145,11 +145,11 @@ function selectAndLocateNode(node: GraphNode) {
 .search-input {
   flex: 1;
   height: 100%;
-  border: none;
-  background: transparent;
   font-size: 14px;
   color: #1a1a2e;
   outline: none;
+  background: transparent;
+  border: none;
 }
 
 .search-input::placeholder {

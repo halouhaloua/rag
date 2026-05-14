@@ -6,10 +6,11 @@ import type {
 } from '#/api/core/rag';
 import type { ChatMessageItem } from '#/composables/useChat';
 
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { Page } from '@vben/common-ui';
-import { Plus, Trash2 } from '@vben/icons';
+import { PanelLeft, PanelRight, Plus, Trash2 } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
 
 import {
   ElButton,
@@ -21,7 +22,6 @@ import {
 
 import {
   chatCompletionStream,
-  createConversationApi,
   deleteConversationApi,
   getChatHistoryApi,
   getFileListApi,
@@ -34,7 +34,8 @@ import ChatArea from '#/components/rag/ChatArea.vue';
 
 defineOptions({ name: 'QAPage' });
 
-const USER_ID = 'current'; // will be replaced with actual user ID
+const userStore = useUserStore();
+const currentUserId = computed(() => userStore.userInfo?.userId);
 
 const kbs = ref<KnowledgeBase[]>([]);
 const selectedKbId = ref('');
@@ -47,6 +48,7 @@ const messages = ref<ChatMessageItem[]>([]);
 const isStreaming = ref(false);
 const loadingConv = ref(false);
 const ircotEnabled = ref(false);
+const sidebarCollapsed = ref(false);
 
 let msgCounter = 0;
 
@@ -66,7 +68,9 @@ async function loadFiles(kbId: string) {
 
 async function loadConversations() {
   try {
-    const res = await getUserConversationsApi(USER_ID, 1, 50);
+    const userId = currentUserId.value;
+    if (!userId) return;
+    const res = await getUserConversationsApi(userId, 1, 50);
     conversations.value = res;
   } catch {
     conversations.value = [];
@@ -77,13 +81,41 @@ async function loadHistory(convId: string) {
   loadingConv.value = true;
   try {
     const history = await getChatHistoryApi(convId);
-    messages.value = history.map((m: any, i: number) => ({
-      id: `hist_${i}`,
-      role: m.role,
-      content:
-        typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-      timestamp: new Date(m.sys_create_datetime).getTime(),
-    }));
+    messages.value = history.map((m: any, i: number) => {
+      const msg: ChatMessageItem = {
+        id: `hist_${i}`,
+        role: m.role,
+        content: '',
+        timestamp: new Date(m.sys_create_datetime).getTime(),
+      };
+
+      if (m.role === 'assistant') {
+        try {
+          const parsed =
+            typeof m.content === 'string'
+              ? JSON.parse(m.content)
+              : m.content;
+          msg.content = parsed.answer || '';
+          msg.subQuestions = parsed.sub_questions;
+          msg.retrievedTriples = parsed.retrieved_triples;
+          msg.retrievedChunks = parsed.retrieved_chunks;
+          if (parsed.reasoning_steps) {
+            msg.reasoningSteps = { reasoning_steps: parsed.reasoning_steps };
+          }
+          msg.visualizationData = parsed.visualization_data;
+        } catch {
+          msg.content =
+            typeof m.content === 'string'
+              ? m.content
+              : JSON.stringify(m.content);
+        }
+      } else {
+        msg.content =
+          typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      }
+
+      return msg;
+    });
     msgCounter = messages.value.length;
   } catch {
     messages.value = [];
@@ -92,19 +124,10 @@ async function loadHistory(convId: string) {
   }
 }
 
-async function handleNewConversation() {
-  try {
-    const conv = await createConversationApi({
-      user_id: USER_ID,
-      title: '新对话',
-    });
-    conversations.value.unshift(conv);
-    selectedConvId.value = conv.id;
-    messages.value = [];
-    msgCounter = 0;
-  } catch (error: any) {
-    ElMessage.error(error.message || '创建对话失败');
-  }
+function handleNewConversation() {
+  messages.value = [];
+  msgCounter = 0;
+  selectedConvId.value = null;
 }
 
 async function handleSelectConversation(convId: string) {
@@ -129,21 +152,21 @@ async function handleDeleteConversation(convId: string) {
 }
 
 function addUserMessage(text: string) {
-  messages.value.push({
+  messages.value.push(reactive({
     id: `msg_${++msgCounter}`,
-    role: 'user',
+    role: 'user' as const,
     content: text,
     timestamp: Date.now(),
-  });
+  }));
 }
 
 function addAssistantMessage() {
-  const msg: ChatMessageItem = {
+  const msg = reactive({
     id: `msg_${++msgCounter}`,
-    role: 'assistant',
+    role: 'assistant' as const,
     content: '',
     timestamp: Date.now(),
-  };
+  }) as ChatMessageItem;
   messages.value.push(msg);
   return msg;
 }
@@ -172,6 +195,12 @@ async function handleSend(question: string) {
     return;
   }
 
+  const userId = currentUserId.value;
+  if (!userId) {
+    ElMessage.error('无法获取当前用户信息');
+    return;
+  }
+
   isStreaming.value = true;
   addUserMessage(question);
   const assistantMsg = addAssistantMessage();
@@ -180,7 +209,7 @@ async function handleSend(question: string) {
   try {
     await chatCompletionStream(
       {
-        user_id: USER_ID,
+        user_id: userId,
         conversation_id: selectedConvId.value || undefined,
         question,
         model_name: 'qwen',
@@ -206,6 +235,9 @@ async function handleSend(question: string) {
           // progress updates
         },
         onDone: (data) => {
+          if (data.answer && !assistantMsg.content) {
+            assistantMsg.content = data.answer;
+          }
           isStreaming.value = false;
           selectedConvId.value = data.conversation_id || selectedConvId.value;
           loadConversations();
@@ -249,17 +281,26 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <div class="qa-page">
-      <div class="sidebar">
+      <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
         <div class="sidebar-header">
-          <h3>对话历史</h3>
-          <ElButton
-            :icon="Plus"
-            circle
-            size="small"
-            @click="handleNewConversation"
-          />
+          <h3 v-show="!sidebarCollapsed">对话历史</h3>
+          <div class="sidebar-actions">
+            <ElButton
+              v-show="!sidebarCollapsed"
+              :icon="Plus"
+              circle
+              size="small"
+              @click="handleNewConversation"
+            />
+            <ElButton
+              :icon="sidebarCollapsed ? PanelRight : PanelLeft"
+              circle
+              size="small"
+              @click="sidebarCollapsed = !sidebarCollapsed"
+            />
+          </div>
         </div>
-        <div class="conv-list">
+        <div v-show="!sidebarCollapsed" class="conv-list">
           <div
             v-for="conv in conversations"
             :key="conv.id"
@@ -352,6 +393,11 @@ onMounted(() => {
   overflow: hidden;
   background: var(--el-bg-color-overlay);
   border-radius: 8px;
+  transition: width 0.25s ease;
+}
+
+.sidebar.collapsed {
+  width: 48px;
 }
 
 .sidebar-header {
@@ -360,6 +406,17 @@ onMounted(() => {
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.sidebar.collapsed .sidebar-header {
+  justify-content: center;
+  padding: 12px 8px;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 .sidebar-header h3 {

@@ -29,6 +29,7 @@ export function useGraphChart(
   let currentGraphData: GraphData | null = null;
   let currentLayout: string = 'force';
   const nodeDraggedPositions = new Map<string, { x: number; y: number }>();
+  let resizeObserver: ResizeObserver | null = null;
 
   function getSeriesBase() {
     return {
@@ -80,6 +81,14 @@ export function useGraphChart(
     }
 
     chartInstance.value = echarts.init(containerRef.value);
+
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+    }
+    resizeObserver = new ResizeObserver(() => {
+      chartInstance.value?.resize();
+    });
+    resizeObserver.observe(containerRef.value);
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
@@ -229,10 +238,15 @@ export function useGraphChart(
   }
 
   function updateChart(data: GraphData, schemeName?: string) {
+    const wasNew = !chartInstance.value;
     if (!chartInstance.value) {
       initChart();
     }
     if (!chartInstance.value) return;
+
+    if (wasNew) {
+      chartInstance.value.resize();
+    }
 
     currentGraphData = data;
     if (schemeName) {
@@ -389,6 +403,10 @@ export function useGraphChart(
   }
 
   function dispose() {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
     chartInstance.value?.dispose();
     chartInstance.value = null;
   }

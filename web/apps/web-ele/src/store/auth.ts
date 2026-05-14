@@ -108,7 +108,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchUserInfo() {
     let userInfo: null | UserInfo = null;
-    userInfo = await getUserInfoApi();
+    const raw = await getUserInfoApi();
+    if (raw) {
+      userInfo = {
+        ...raw,
+        userId: (raw as any).id ?? (raw as any).userId ?? '',
+        realName: (raw as any).name ?? (raw as any).realName ?? '',
+      };
+    }
     userStore.setUserInfo(userInfo);
     return userInfo;
   }

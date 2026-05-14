@@ -9,6 +9,7 @@ import {
   reconstructGraphApi,
 } from '#/api/core/rag';
 import { useGraphProgress } from '#/composables/useGraphProgress';
+
 import UploadDialog from './upload-dialog.vue';
 import SchemaEditor from './schema-editor.vue';
 

@@ -9,6 +9,7 @@ from core.router import router as core_router
 from scheduler.router import router as scheduler_router
 from core.websocket.router import router as websocket_router
 from graphrag.router import router as rag_router
+from graphrag.rag.api import ws_router as rag_ws_router
 
 from utils.auth_middleware import AuthMiddleware
 
@@ -67,6 +68,7 @@ app.add_middleware(AuthMiddleware)
 app.include_router(core_router, prefix="/api/core", dependencies=[Depends(oauth2_scheme)])
 app.include_router(scheduler_router, prefix="/api", dependencies=[Depends(oauth2_scheme)])
 app.include_router(rag_router, prefix="/rag", dependencies=[Depends(oauth2_scheme)])
+app.include_router(rag_ws_router, prefix="/rag")
 # WebSocket路由（不需要OAuth2依赖，WebSocket自己处理认证）
 app.include_router(websocket_router)
 

@@ -242,8 +242,8 @@ function handleSchemeChange(schemeKey: string) {
 
 .toolbar-btn:hover {
   background: #ede9fe;
-  transform: scale(1.05);
   box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+  transform: scale(1.05);
 }
 
 .toolbar-btn:active {

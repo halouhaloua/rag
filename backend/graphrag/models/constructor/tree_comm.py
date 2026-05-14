@@ -1,5 +1,4 @@
 import json
-import time
 import warnings
 from collections import defaultdict
 from typing import Dict, List
@@ -8,7 +7,6 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 import json_repair
-from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -25,24 +23,21 @@ from graphrag.config import get_config
 
 class FastTreeComm:
     def __init__(
-        self, graph, embedding_model="all-MiniLM-L6-v2", struct_weight=0.3, config=get_config
+        self, graph, struct_weight=0.3, config=None
     ):
         """
         :param graph: Input graph (NetworkX DiGraph)
-        :param embedding_model: Sentence embedding model
         :param struct_weight: Structural similarity weight (float between 0 and 1)
         :param config: Configuration object (optional)
         """
 
+        if config is None:
+            config = get_config()
         self.config = config
         self.graph = graph
 
-        if config:
-            struct_weight = (
-                struct_weight
-                if struct_weight != 0.3
-                else config.tree_comm.struct_weight
-            )
+        if struct_weight == 0.3:
+            struct_weight = config.tree_comm.struct_weight
 
         self.model = config.tree_comm.get_embedding_model()
         self.semantic_cache = {}
@@ -59,11 +54,8 @@ class FastTreeComm:
 
         self.triple_strings_cache = {}
         self.degree_cache = {n: self.graph.degree(n) for n in self.node_list}
-
         self.adjacency_sparse = self._build_sparse_adjacency()
-
         self._precompute_all_triples()
-
         self.llm_client = call_llm_api.LLMCompletionCall()
 
     def _build_sparse_adjacency(self):

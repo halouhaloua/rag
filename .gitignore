@@ -6,6 +6,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+dir/
 
 # =========== IDE / 编辑器 ===========
 .idea/

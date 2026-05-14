@@ -120,7 +120,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 500px;
+  min-height: 0;
   padding: 8px 0;
 }
 
@@ -146,9 +146,10 @@ onMounted(() => {
 
 .graph-wrapper {
   position: relative;
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;

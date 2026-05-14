@@ -1,4 +1,4 @@
-# ZQ Platform - FastAPI Backend
+# FastAPI Backend
 
 基于 FastAPI 的现代化异步后端服务，使用 SQLAlchemy 异步 ORM + Alembic 数据库迁移 + PostgreSQL。
 
@@ -391,21 +391,3 @@ python main.py
 - 使用小写短横线：`/api/core/user-profile`
 - 静态路由在前：`/api/core/menu/check/name`
 - 动态路由在后：`/api/core/menu/{menu_id}`
-
-## 常见问题
-
-### 1. 迁移文件为空
-
-确保 `alembic/env.py` 中的 `auto_import_models()` 函数正确扫描了所有模型文件。
-
-### 2. 路由重定向 307
-
-检查路由定义，使用 `@router.post("")` 而不是 `@router.post("/")`。
-
-### 3. 数据库连接失败
-
-检查 `env/dev.env` 中的 `DATABASE_URL` 配置是否正确。
-
-## 许可证
-
-MIT License

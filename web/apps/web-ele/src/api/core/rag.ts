@@ -249,60 +249,57 @@ export async function askQuestionStream(
   return new Promise((resolve, reject) => {
     streamRequestClient(
       `/rag/api/knowledge-base/${kbId}/files/${fileId}/ask-question?${params}`,
+      body,
       {
-        method: 'POST',
-        body: JSON.stringify(body),
-        headers: { 'Content-Type': 'application/json' },
-      },
-      {
-        onData: (raw: string) => {
-          try {
-            const data = JSON.parse(raw);
-            if (!['token', 'metadata', 'reasoning_steps', 'visualization', 'done', 'status', 'error', 'answer_start', 'answer_end', 'reasoning_start', 'reasoning_end', 'ircot_start', 'ircot_end', 'answer_found'].includes(data.type)) return;
-            switch (data.type) {
-              case 'token':
-                if (data.phase === 'reasoning') {
-                  callbacks?.onReasoningToken?.(data.text);
-                } else {
-                  answerParts.push(data.text);
-                  callbacks?.onToken?.(data.text);
-                }
-                break;
-              case 'metadata':
-                subQuestions = data.sub_questions || [];
-                triples = data.triples || [];
-                chunks = data.chunks || [];
-                callbacks?.onMetadata?.(data);
-                break;
-              case 'reasoning_steps':
-                reasoningSteps = data.data?.reasoning_steps || [];
-                callbacks?.onReasoningSteps?.(data.data);
-                break;
-              case 'visualization':
-                visualizationData = data.data || {};
-                callbacks?.onVisualization?.(data.data);
-                break;
-              case 'done':
-                callbacks?.onDone?.(data);
-                resolve({
-                  answer: data.answer || answerParts.join(''),
-                  sub_questions: subQuestions,
-                  retrieved_triples: triples,
-                  retrieved_chunks: chunks,
-                  reasoning_steps: reasoningSteps,
-                  visualization_data: visualizationData,
-                });
-                break;
-              case 'status':
-                callbacks?.onStatus?.(data.progress, data.message);
-                break;
-              case 'error':
-                callbacks?.onError?.(new Error(data.message));
-                reject(new Error(data.message));
-                break;
-            }
-          } catch {
-            // skip non-JSON lines
+        onData: (data: any) => {
+          if (!['token', 'metadata', 'reasoning_steps', 'visualization', 'done', 'status', 'error', 'answer_start', 'answer_end', 'reasoning_start', 'reasoning_end', 'ircot_start', 'ircot_end', 'answer_found'].includes(data.type)) return;
+          switch (data.type) {
+            case 'token':
+              if (data.phase === 'reasoning') {
+                callbacks?.onReasoningToken?.(data.text);
+              } else {
+                answerParts.push(data.text);
+                callbacks?.onToken?.(data.text);
+              }
+              break;
+            case 'metadata':
+              subQuestions = data.sub_questions || [];
+              triples = data.triples || [];
+              chunks = data.chunks || [];
+              callbacks?.onMetadata?.(data);
+              break;
+            case 'reasoning_steps':
+              reasoningSteps = data.data?.reasoning_steps || [];
+              callbacks?.onReasoningSteps?.(data.data);
+              break;
+            case 'visualization':
+              visualizationData = data.data || {};
+              callbacks?.onVisualization?.(data.data);
+              break;
+            case 'done':
+              callbacks?.onDone?.(data);
+              resolve({
+                answer: data.answer || answerParts.join(''),
+                sub_questions: subQuestions,
+                retrieved_triples: triples,
+                retrieved_chunks: chunks,
+                reasoning_steps: reasoningSteps,
+                visualization_data: visualizationData,
+              });
+              break;
+            case 'answer_found':
+              if (data.answer) {
+                answerParts.push(data.answer);
+                callbacks?.onToken?.(data.answer);
+              }
+              break;
+            case 'status':
+              callbacks?.onStatus?.(data.progress, data.message);
+              break;
+            case 'error':
+              callbacks?.onError?.(new Error(data.message));
+              reject(new Error(data.message));
+              break;
           }
         },
         onError: (err) => {
@@ -392,60 +389,57 @@ export async function chatCompletionStream(
   return new Promise((resolve, reject) => {
     streamRequestClient(
       '/rag/chat/message/chat',
+      data,
       {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-      },
-      {
-        onData: (raw: string) => {
-          try {
-            const json = JSON.parse(raw);
-            if (!['token', 'metadata', 'reasoning_steps', 'visualization', 'done', 'status', 'error'].includes(json.type)) return;
-            switch (json.type) {
-              case 'token':
-                if (json.phase === 'reasoning') {
-                  callbacks?.onReasoningToken?.(json.text);
-                } else {
-                  answerParts.push(json.text);
-                  callbacks?.onToken?.(json.text);
-                }
-                break;
-              case 'metadata':
-                subQuestions = json.sub_questions || [];
-                triples = json.triples || [];
-                chunks = json.chunks || [];
-                callbacks?.onMetadata?.(json);
-                break;
-              case 'reasoning_steps':
-                reasoningSteps = json.data?.reasoning_steps || [];
-                callbacks?.onReasoningSteps?.(json.data);
-                break;
-              case 'visualization':
-                visualizationData = json.data || {};
-                callbacks?.onVisualization?.(json.data);
-                break;
-              case 'done':
-                callbacks?.onDone?.(json);
-                resolve({
-                  answer: json.answer || answerParts.join(''),
-                  sub_questions: subQuestions,
-                  retrieved_triples: triples,
-                  retrieved_chunks: chunks,
-                  reasoning_steps: reasoningSteps,
-                  visualization_data: visualizationData,
-                });
-                break;
-              case 'status':
-                callbacks?.onStatus?.(json.progress, json.message);
-                break;
-              case 'error':
-                callbacks?.onError?.(new Error(json.message));
-                reject(new Error(json.message));
-                break;
-            }
-          } catch {
-            // skip
+        onData: (data: any) => {
+          if (!['token', 'metadata', 'reasoning_steps', 'visualization', 'done', 'status', 'error', 'answer_start', 'answer_end', 'reasoning_start', 'reasoning_end', 'ircot_start', 'ircot_end', 'answer_found'].includes(data.type)) return;
+          switch (data.type) {
+            case 'token':
+              if (data.phase === 'reasoning') {
+                callbacks?.onReasoningToken?.(data.text);
+              } else {
+                answerParts.push(data.text);
+                callbacks?.onToken?.(data.text);
+              }
+              break;
+            case 'metadata':
+              subQuestions = data.sub_questions || [];
+              triples = data.triples || [];
+              chunks = data.chunks || [];
+              callbacks?.onMetadata?.(data);
+              break;
+            case 'reasoning_steps':
+              reasoningSteps = data.data?.reasoning_steps || [];
+              callbacks?.onReasoningSteps?.(data.data);
+              break;
+            case 'visualization':
+              visualizationData = data.data || {};
+              callbacks?.onVisualization?.(data.data);
+              break;
+            case 'done':
+              callbacks?.onDone?.(data);
+              resolve({
+                answer: data.answer || answerParts.join(''),
+                sub_questions: subQuestions,
+                retrieved_triples: triples,
+                retrieved_chunks: chunks,
+                reasoning_steps: reasoningSteps,
+                visualization_data: visualizationData,
+              });
+              break;
+            case 'answer_found':
+              if (data.answer) {
+                answerParts.push(data.answer);
+                callbacks?.onToken?.(data.answer);
+              }
+              break;
+            case 'status':
+              callbacks?.onStatus?.(data.progress, data.message);
+              break;
+            case 'error':
+              callbacks?.onError?.(new Error(data.message));
+              reject(new Error(data.message));
+              break;
           }
         },
         onError: (err) => {

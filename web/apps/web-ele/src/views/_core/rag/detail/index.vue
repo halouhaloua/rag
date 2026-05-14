@@ -122,15 +122,19 @@ onMounted(async () => {
   flex: 1;
   flex-direction: column;
   padding: 0 8px;
+  overflow: hidden;
   background: var(--el-bg-color-overlay);
   border-radius: 8px;
 }
 
 .kb-tabs :deep(.el-tabs__content) {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .kb-tabs :deep(.el-tab-pane) {
   height: 100%;
+  overflow: hidden;
 }
 </style>

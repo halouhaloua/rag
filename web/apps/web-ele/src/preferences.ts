@@ -20,8 +20,8 @@ export const overridesPreferences = defineOverridesPreferences({
     mode: 'light',
   },
   copyright: {
-    companyName: 'ZQ-Platform',
-    companySiteLink: 'https://django-ninja.zq-platform.cn/analytics',
+    companyName: '宇宙无限公司',
+    companySiteLink: 'https://yuzhouwuxian/analytics',
     date: '2025',
     enable: true,
     icp: '',

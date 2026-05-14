@@ -1,22 +1,45 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
-import { ElTag, ElButton, ElTooltip, ElDropdown, ElDropdownMenu, ElDropdownItem, ElMessageBox, ElMessage } from 'element-plus';
-import { Edit, Trash2, MoreHorizontal, Upload, RefreshCw, FileText, Clock, List, Eye } from '@vben/icons';
 import type { KnowledgeBase } from '#/api/core/rag';
+
+import { computed } from 'vue';
+
+import {
+  Clock,
+  Edit,
+  Eye,
+  FileText,
+  List,
+  MoreHorizontal,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from '@vben/icons';
+
+import {
+  ElButton,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+  ElMessage,
+  ElMessageBox,
+  ElTag,
+  ElTooltip,
+} from 'element-plus';
+
 import { deleteKnowledgeBaseApi } from '#/api/core/rag';
 
 const props = defineProps<{
-  kb: KnowledgeBase;
   description: string;
+  kb: KnowledgeBase;
 }>();
 
 const emit = defineEmits<{
   click: [];
-  edit: [];
-  deleted: [];
   construct: [];
-  viewGraph: [];
+  deleted: [];
+  edit: [];
   uploadSchema: [];
+  viewGraph: [];
 }>();
 
 const statusType = computed(() => {
@@ -47,9 +70,18 @@ async function handleDelete() {
 
 function handleCommand(command: string) {
   switch (command) {
-    case 'upload-schema': emit('uploadSchema'); break;
-    case 'construct': emit('construct'); break;
-    case 'view': emit('viewGraph'); break;
+    case 'construct': {
+      emit('construct');
+      break;
+    }
+    case 'upload-schema': {
+      emit('uploadSchema');
+      break;
+    }
+    case 'view': {
+      emit('viewGraph');
+      break;
+    }
   }
 }
 </script>
@@ -58,40 +90,68 @@ function handleCommand(command: string) {
   <div class="doc-card" @click="emit('click')">
     <div class="card-header">
       <div class="card-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+          />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
         </svg>
       </div>
       <div class="card-title-section">
         <h4 class="doc-name">{{ kb.name }}</h4>
-        <span class="doc-subtitle">{{ kb.kb_type === 'demo' ? '系统演示' : '用户创建' }}</span>
+        <span class="doc-subtitle">{{
+          kb.kb_type === 'demo' ? '系统演示' : '用户创建'
+        }}</span>
       </div>
       <div class="card-actions">
         <ElTooltip content="编辑描述" placement="top">
-          <ElButton circle size="small" class="action-btn" @click="emit('edit')">
-            <Edit style="width:14px;height:14px" />
+          <ElButton
+            circle
+            size="small"
+            class="action-btn"
+            @click="emit('edit')"
+          >
+            <Edit style="width: 14px; height: 14px" />
           </ElButton>
         </ElTooltip>
         <ElTooltip content="删除" placement="top">
           <ElButton
-            circle size="small"
+            circle
+            size="small"
             class="action-btn delete-btn"
             :disabled="kb.kb_type === 'demo'"
             @click="handleDelete"
           >
-            <Trash2 style="width:14px;height:14px" />
+            <Trash2 style="width: 14px; height: 14px" />
           </ElButton>
         </ElTooltip>
         <ElDropdown trigger="click" @command="handleCommand">
           <ElButton circle size="small" class="action-btn">
-            <MoreHorizontal style="width:14px;height:14px" />
+            <MoreHorizontal style="width: 14px; height: 14px" />
           </ElButton>
           <template #dropdown>
             <ElDropdownMenu>
-              <ElDropdownItem command="upload-schema" :disabled="kb.kb_type === 'demo'" :icon="Upload">
+              <ElDropdownItem
+                command="upload-schema"
+                :disabled="kb.kb_type === 'demo'"
+                :icon="Upload"
+              >
                 上传Schema
               </ElDropdownItem>
-              <ElDropdownItem command="construct" :disabled="kb.kb_type === 'demo'" :icon="RefreshCw">
+              <ElDropdownItem
+                command="construct"
+                :disabled="kb.kb_type === 'demo'"
+                :icon="RefreshCw"
+              >
                 构建图谱
               </ElDropdownItem>
               <ElDropdownItem command="view" :icon="Eye">
@@ -112,23 +172,25 @@ function handleCommand(command: string) {
       <ElTag :type="statusType" size="small" effect="light">
         {{ statusLabel }}
       </ElTag>
-      <span v-if="kb.kb_type === 'demo'" class="feature-tag demo-tag">示例</span>
+      <span v-if="kb.kb_type === 'demo'" class="feature-tag demo-tag"
+        >示例</span
+      >
     </div>
 
     <div class="card-footer">
       <div class="footer-left">
         <span class="footer-item">
-          <FileText style="width:14px;height:14px" />
+          <FileText style="width: 14px; height: 14px" />
           文件: {{ kb.file_count }}
         </span>
         <span class="footer-item">
-          <List style="width:14px;height:14px" />
+          <List style="width: 14px; height: 14px" />
           分段: {{ kb.file_count * 3 }}
         </span>
       </div>
       <div class="footer-right">
         <span class="footer-item time">
-          <Clock style="width:14px;height:14px" />
+          <Clock style="width: 14px; height: 14px" />
           {{ kb.sys_create_datetime?.slice(0, 10) }}
         </span>
       </div>

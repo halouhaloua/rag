@@ -1,9 +1,20 @@
 import { ref, onUnmounted } from 'vue';
 
+import { useAccessStore } from '@vben/stores';
+
 export interface ProgressEvent {
   stage: string;
   progress: number;
   message: string;
+}
+
+function getWsBaseUrl(): string {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${location.host}/basic-api/rag/api/ws`;
+}
+
+function getAccessToken(): string {
+  return useAccessStore().accessToken || '';
 }
 
 export function useGraphProgress() {
@@ -29,8 +40,8 @@ export function useGraphProgress() {
     isComplete.value = false;
     hasError.value = false;
 
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${location.host}/basic-api/rag/api/ws/${clientId}`;
+    const token = getAccessToken();
+    const wsUrl = `${getWsBaseUrl()}/${clientId}?token=${encodeURIComponent(token)}`;
 
     ws = new WebSocket(wsUrl);
 
@@ -96,8 +107,8 @@ export function useGraphProgress() {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const cid = generateClientId();
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${location.host}/basic-api/rag/api/ws/${cid}`;
+      const token = getAccessToken();
+      const wsUrl = `${getWsBaseUrl()}/${cid}?token=${encodeURIComponent(token)}`;
 
       showProgressDialog.value = true;
       progress.value = 0;
@@ -120,7 +131,10 @@ export function useGraphProgress() {
         // WS connected, send construct request
         fetch(`/basic-api/rag/api/knowledge-base/${kbId}/files/${fileId}/construct-graph?client_id=${cid}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
         }).catch((err) => done(err));
       };
 

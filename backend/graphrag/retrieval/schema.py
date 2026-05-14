@@ -27,7 +27,7 @@ class ChatRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     id: str
     role: str
-    content: str | dict
+    content: str
     model_name: Optional[str]
     sys_create_datetime: datetime
 

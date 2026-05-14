@@ -1,5 +1,6 @@
 from typing import List, Optional
 import json
+from urllib.parse import parse_qs
 
 from fastapi import (
     APIRouter,
@@ -43,15 +44,31 @@ from graphrag.rag.db_service import (
     KnowledgeGraphService,
 )
 from graphrag.rag.socket_manager import manager
+from utils.security import verify_access_token
+from loguru import logger
 
 router = APIRouter(prefix="/api", tags=["知识库管理"])
+ws_router = APIRouter(prefix="/api", tags=["知识图谱WebSocket"])
 
 
 # ──────────────────────────────────────────────
-# WebSocket (unchanged)
+# WebSocket (token auth from query string)
 # ──────────────────────────────────────────────
-@router.websocket("/ws/{client_id}")
+@ws_router.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    query_string = websocket.scope.get('query_string', b'').decode('utf-8')
+    token = None
+    if query_string:
+        query_params = parse_qs(query_string)
+        token_list = query_params.get('token', [])
+        if token_list:
+            token = token_list[0]
+
+    if not token or not verify_access_token(token):
+        await websocket.accept()
+        await websocket.close(code=4001)
+        return
+
     await manager.connect(websocket, client_id)
     try:
         while True:

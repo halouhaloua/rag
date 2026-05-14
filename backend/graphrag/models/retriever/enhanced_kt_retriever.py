@@ -10,7 +10,6 @@ import spacy
 import torch
 import torch.nn.functional as F
 import concurrent.futures
-from sentence_transformers import SentenceTransformer
 
 from graphrag.models.retriever import utils as retriever_utils
 from graphrag.models.retriever.faiss_filter import DualFAISSRetriever
@@ -44,7 +43,6 @@ class KTRetriever:
         self,
         dataset: str,
         json_path: str = '',
-        qa_encoder: Optional[SentenceTransformer] = None,
         device: str = "cuda",
         cache_dir: str = "retriever/faiss_cache_new",
         top_k: int = 5,
@@ -58,7 +56,9 @@ class KTRetriever:
         self.config = config
 
         if config:
-            json_path = json_path or config.get_dataset_config(dataset).graph_output
+            ds_cfg = config.get_dataset_config(dataset)
+            if graph_data is None and not json_path and ds_cfg:
+                json_path = ds_cfg.graph_output
             device = device if device != "cuda" else config.embeddings.device
             cache_dir = (
                 cache_dir
@@ -69,7 +69,6 @@ class KTRetriever:
             recall_paths = (
                 recall_paths if recall_paths != 2 else config.retrieval.recall_paths
             )
-            schema_path = schema_path or config.get_dataset_config(dataset).schema_path
             mode = mode if mode != "agent" else config.triggers.mode
 
 
@@ -594,7 +593,8 @@ class KTRetriever:
             temp_index.add(filtered_embeddings_array)
 
             search_k = min(self.top_k, len(filtered_node_embeddings))
-            _, indices = temp_index.search(question_embed.reshape(1, -1), search_k)
+            query_np = question_embed.cpu().numpy().reshape(1, -1).astype("float32")
+            _, indices = temp_index.search(query_np, search_k)
 
             top_filtered_nodes = [
                 filtered_node_map[idx] for idx in indices[0] if idx in filtered_node_map
@@ -1020,13 +1020,13 @@ class KTRetriever:
             return node_data["properties"].get("chunk id")
         return node_data.get("chunk id")
 
-    def _get_matching_chunks(self, chunk_ids: set) -> List[str]:
-        """Get chunk contents for given chunk IDs."""
-        return [
-            self.chunk2id[chunk_id]
+    def _get_matching_chunks(self, chunk_ids: set) -> dict:
+        """Get chunk contents for given chunk IDs as {chunk_id: content} dict."""
+        return {
+            chunk_id: self.chunk2id[chunk_id]
             for chunk_id in chunk_ids
             if chunk_id in self.chunk2id
-        ]
+        }
 
     def process_retrieval_results(
         self, question: str, top_k: int = 20, involved_types: dict = {}

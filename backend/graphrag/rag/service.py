@@ -5,7 +5,6 @@ import shutil
 import asyncio
 import pathlib
 import tempfile
-from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -14,11 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from graphrag.rag.socket_manager import manager
 from graphrag.config import get_config
-from graphrag.models.constructor import kt_gen as constructor
-from graphrag.models.retriever import (
-    agentic_decomposer as decomposer,
-    enhanced_kt_retriever as retriever,
-)
 
 from graphrag.rag.db_service import (
     KnowledgeBaseService,
@@ -34,10 +28,18 @@ from graphrag.rag.schema import (
 path = pathlib.Path(__file__).parent.parent
 
 try:
+    from graphrag.models.constructor import kt_gen as constructor
+    from graphrag.models.retriever import (
+        agentic_decomposer as decomposer,
+        enhanced_kt_retriever as retriever,
+    )
     GRAPHRAG_AVAILABLE = True
     logger.info("GraphRAG components loaded successfully")
 except ImportError as e:
     GRAPHRAG_AVAILABLE = False
+    constructor = None
+    decomposer = None
+    retriever = None
     logger.error(f"GraphRAG components not available: {e}")
 
 config = None
@@ -84,7 +86,7 @@ async def send_progress_update(client_id: str, stage: str, progress: int, messag
     )
 
 
-async def clear_cache_files(kb_id: str, file_id: str):
+def _clear_cache_files_sync(kb_id: str, file_id: str):
     try:
         cache_key = file_id
         faiss_cache_dir = path / f"retriever/faiss_cache_new/{cache_key}"
@@ -114,7 +116,12 @@ async def clear_cache_files(kb_id: str, file_id: str):
         logger.error(f"Error clearing cache files for {file_id}: {e}")
 
 
-async def extract_text_from_document(file_path: str, file_ext: str) -> str:
+async def clear_cache_files(kb_id: str, file_id: str):
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _clear_cache_files_sync, kb_id, file_id)
+
+
+def _extract_text_from_document_sync(file_path: str, file_ext: str) -> str:
     try:
         if file_ext in [".txt", ".md"]:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -148,7 +155,12 @@ async def extract_text_from_document(file_path: str, file_ext: str) -> str:
     return ""
 
 
-async def extract_text_from_spreadsheet(file_path: str, file_ext: str):
+async def extract_text_from_document(file_path: str, file_ext: str) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _extract_text_from_document_sync, file_path, file_ext)
+
+
+def _extract_text_from_spreadsheet_sync(file_path: str, file_ext: str):
     try:
         if file_ext == ".csv":
             import csv
@@ -175,6 +187,11 @@ async def extract_text_from_spreadsheet(file_path: str, file_ext: str):
     except Exception as e:
         return f"[Error: {str(e)}]"
     return ""
+
+
+async def extract_text_from_spreadsheet(file_path: str, file_ext: str):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _extract_text_from_spreadsheet_sync, file_path, file_ext)
 
 
 async def upload_files_to_kb(
@@ -249,29 +266,18 @@ async def construct_file_graph_service(
     cfg = get_config_instance()
     schema = _ensure_schema(file_record.schema_json)
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False, encoding="utf-8"
-    ) as corpus_tmp:
-        corpus_content = [{"title": file_record.filename, "text": file_record.content}]
-        json.dump(corpus_content, corpus_tmp, ensure_ascii=False, indent=2)
-        corpus_path = corpus_tmp.name
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False, encoding="utf-8"
-    ) as schema_tmp:
-        json.dump(schema, schema_tmp, ensure_ascii=False, indent=2)
-        schema_path = schema_tmp.name
+    documents = [{"title": file_record.filename, "text": file_record.content}]
 
     await send_progress_update(client_id, "construction", 10, "加载配置...")
     builder = constructor.KTBuilder(
-        file_id, schema_path, mode=cfg.construction.mode, config=cfg,
+        file_id, None, mode=cfg.construction.mode, config=cfg,
         schema_data=schema,
     )
 
     await send_progress_update(client_id, "construction", 20, "开始实体关系抽取...")
 
     def build_graph_sync():
-        return builder.build_knowledge_graph(corpus_path)
+        return builder.build_knowledge_graph(documents=documents)
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, build_graph_sync)
@@ -300,8 +306,7 @@ async def construct_file_graph_service(
 
     await KnowledgeBaseFileService.update_file_graph_status(db, file_id, True)
 
-    os.unlink(corpus_path)
-    os.unlink(schema_path)
+    await db.commit()
 
     await send_progress_update(client_id, "construction", 95, "准备可视化数据...")
     graph_vis_data = await prepare_graph_visualization_from_data(graph_data)
@@ -388,11 +393,9 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
     if db:
         graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
     if not graph_record:
-        graph_record = await _get_graph_from_file(file_id)
-    if not graph_record:
         yield _sse(type="error", message="Graph not found. Please construct graph first.")
         return
-    graph_data_source = graph_record.graph_data if hasattr(graph_record, 'graph_data') else graph_record.get("graph_data")
+    graph_data_source = graph_record.graph_data
     if not graph_data_source:
         yield _sse(type="error", message="Graph data is empty.")
         return
@@ -477,8 +480,10 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
     initial_chunk_ids = list(set(all_chunk_ids))
     initial_chunk_contents = _merge_chunk_contents(initial_chunk_ids, all_chunk_contents)
     context_initial = (
-        "=== Triples ===\n" + "\n".join(initial_triples[:20])
-        + "\n=== Chunks ===\n" + "\n".join(initial_chunk_contents[:10])
+        "=== Triples ===\n" +
+        "\n".join(initial_triples[:20])
+        + "\n=== Chunks ===\n" +
+        "\n".join(initial_chunk_contents[:10])
     )
     init_prompt = kt_retriever.generate_prompt(question=question, sub_question=sub_questions, context=context_initial)
 
@@ -628,28 +633,11 @@ async def ask_file_question_stream(file_id: str, question: str, client_id: str, 
     yield _sse(type="done", answer=final_answer)
 
 
-async def _get_graph_from_file(file_id: str) -> Optional[Dict]:
-    graph_path = path / f"output/graphs/{file_id}_new.json"
-    if os.path.exists(graph_path):
-        with open(graph_path, "r", encoding="utf-8") as f:
-            return {"graph_data": json.load(f)}
-    return None
-
-
 async def get_file_graph_service(file_id: str, db: AsyncSession):
     graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
     if not graph_record or not graph_record.graph_data:
         return {"nodes": [], "links": [], "categories": [], "stats": {}}
     return await prepare_graph_visualization_from_data(graph_record.graph_data)
-
-
-async def prepare_graph_visualization(graph_path: str) -> Dict:
-    if os.path.exists(graph_path):
-        with open(graph_path, "r", encoding="utf-8") as f:
-            graph_data = json.load(f)
-    else:
-        return {"nodes": [], "links": [], "categories": [], "stats": {}}
-    return _convert_visualization(graph_data)
 
 
 async def prepare_graph_visualization_from_data(graph_data) -> Dict:

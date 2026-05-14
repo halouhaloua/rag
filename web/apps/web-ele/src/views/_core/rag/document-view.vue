@@ -1,12 +1,23 @@
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import type { KnowledgeBase } from '#/api/core/rag';
+
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
 import { Plus, Search } from '@vben/icons';
+
 import { ElButton, ElInput, ElMessage } from 'element-plus';
-import { getKnowledgeBaseListApi, type KnowledgeBase } from '#/api/core/rag';
-import DocCard from './modules/doc-card.vue';
+
+import {
+  createKnowledgeBaseApi,
+  getKnowledgeBaseListApi,
+  updateKnowledgeBaseApi,
+} from '#/api/core/rag';
+
 import DescriptionEditor from './modules/description-editor.vue';
+import DocCard from './modules/doc-card.vue';
+import KbFormDialog from './modules/kb-form-dialog.vue';
 
 defineOptions({ name: 'DocumentView' });
 
@@ -15,12 +26,15 @@ const kbs = ref<KnowledgeBase[]>([]);
 const searchQuery = ref('');
 const loading = ref(false);
 const descEditorRef = ref<InstanceType<typeof DescriptionEditor>>();
+const formDialogRef = ref<InstanceType<typeof KbFormDialog>>();
 
 const filteredKbs = computed(() => {
   if (!searchQuery.value.trim()) return kbs.value;
   const q = searchQuery.value.toLowerCase();
   return kbs.value.filter(
-    (kb) => kb.name.toLowerCase().includes(q) || (kb.description || '').toLowerCase().includes(q),
+    (kb) =>
+      kb.name.toLowerCase().includes(q) ||
+      (kb.description || '').toLowerCase().includes(q),
   );
 });
 
@@ -40,8 +54,30 @@ function handleCardClick(kb: KnowledgeBase) {
   router.push(`/rag/knowledge-base/${kb.id}`);
 }
 
+function handleCardAction(kb: KnowledgeBase) {
+  router.push(`/rag/knowledge-base/${kb.id}`);
+}
+
 function openEdit(kb: KnowledgeBase) {
   descEditorRef.value?.open(kb);
+}
+
+function handleCreate() {
+  formDialogRef.value?.open();
+}
+
+async function handleSave(
+  data: { description?: string; name: string },
+  editId?: string,
+) {
+  if (editId) {
+    await updateKnowledgeBaseApi(editId, data);
+    ElMessage.success('更新成功');
+  } else {
+    await createKnowledgeBaseApi(data);
+    ElMessage.success('创建成功');
+  }
+  loadKbs();
 }
 
 onMounted(() => {
@@ -54,7 +90,7 @@ onMounted(() => {
     <div class="document-view">
       <div class="page-header">
         <div class="header-left">
-          <h2>文档管理</h2>
+          <h2>知识库管理</h2>
           <span class="doc-count">{{ filteredKbs.length }} 个知识库</span>
         </div>
         <div class="header-right">
@@ -65,7 +101,7 @@ onMounted(() => {
             :prefix-icon="Search"
             style="width: 240px"
           />
-          <ElButton type="primary" :icon="Plus" @click="router.push('/rag/knowledge-base')">
+          <ElButton type="primary" :icon="Plus" @click="handleCreate">
             新建知识库
           </ElButton>
         </div>
@@ -73,12 +109,34 @@ onMounted(() => {
 
       <div v-loading="loading" class="doc-grid">
         <div v-if="filteredKbs.length === 0 && !loading" class="empty-state">
-          <div style="padding:60px 0;color:var(--el-text-color-secondary);text-align:center">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom:16px">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <div
+            style="
+              padding: 60px 0;
+              color: var(--el-text-color-secondary);
+              text-align: center;
+            "
+          >
+            <svg
+              width="64"
+              height="64"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1"
+              style="margin-bottom: 16px"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
             </svg>
             <p>{{ searchQuery ? '未找到匹配的知识库' : '暂无知识库' }}</p>
-            <ElButton v-if="!searchQuery" type="primary" style="margin-top:12px" @click="router.push('/rag/knowledge-base')">
+            <ElButton
+              v-if="!searchQuery"
+              type="primary"
+              style="margin-top: 12px"
+              @click="handleCreate"
+            >
               创建第一个知识库
             </ElButton>
           </div>
@@ -91,11 +149,15 @@ onMounted(() => {
           @click="handleCardClick(kb)"
           @edit="openEdit(kb)"
           @deleted="loadKbs"
+          @view-graph="handleCardAction(kb)"
+          @construct="handleCardAction(kb)"
+          @upload-schema="handleCardAction(kb)"
         />
       </div>
     </div>
 
     <DescriptionEditor ref="descEditorRef" @saved="loadKbs" />
+    <KbFormDialog ref="formDialogRef" @save="handleSave" />
   </Page>
 </template>
 

@@ -33,7 +33,7 @@ def _split_text_with_overlap(
     text: str,
     chunk_size: int = 1000,
     overlap: int = 200,
-    min_tail_tokens: int = 100,
+    min_tail_tokens: int = 300,
 ) -> List[str]:
     """Split text into chunks with overlap using token count."""
     try:
@@ -85,7 +85,7 @@ def token_cal(text: str):
     return len(encoding.encode(text))
 
 
-def _validate_triple_format(triple: list) -> tuple:
+def _validate_triple_format(triple: list) -> tuple | None:
     """Validate and normalize triple format, returning (subject, predicate, object) or None."""
     try:
         if len(triple) > 3:
@@ -105,13 +105,14 @@ class KTBuilder:
 
         self.config = config
         self.dataset_name = dataset_name
+        ds_cfg = config.get_dataset_config(dataset_name)
         self.schema = load_schema(
-            schema_path or config.get_dataset_config(dataset_name).schema_path,
+            schema_path or (ds_cfg.schema_path if ds_cfg else None),
             schema_data,
         )
         self.graph = nx.MultiDiGraph()
         self.node_counter = 0
-        self.datasets_no_chunk = config.construction.datasets_no_chunk
+        self.datasets_no_chunk = config.construction.datasets_no_chunk or []
         self.token_len = 0
         self.lock = threading.Lock()
         self.llm_client = call_llm_api.LLMCompletionCall()
@@ -343,6 +344,7 @@ class KTBuilder:
         _tree_comm = tree_comm.FastTreeComm(
             self.graph,
             struct_weight=self.config.tree_comm.struct_weight,
+            config=self.config,
         )
         comm_to_nodes = _tree_comm.detect_communities(level2_nodes)
 
@@ -354,8 +356,8 @@ class KTBuilder:
         logger.info(f"Community Indexing Time: {end_comm - start_comm}s")
 
 
-    def process_document(self, doc: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Process a single document and return its results."""
+    def process_document(self, doc: Dict[str, Any]):
+        """Process a single document and return its results.  ->List[Dict[str, Any]]"""
         try:
             if not doc:
                 raise ValueError("Document is empty or None")
@@ -382,7 +384,6 @@ class KTBuilder:
 
     def process_all_documents(self, documents: List[Dict[str, Any]]) -> None:
         """Process all documents with high concurrency and pass results to process_level4."""
-
         max_workers = min(
             self.config.construction.max_workers, (os.cpu_count() or 1) + 4
         )
@@ -483,12 +484,13 @@ class KTBuilder:
     def save_graphml(self, output_path: str):
         graph_processor.save_graph(self.graph, output_path)
 
-    def build_knowledge_graph(self, corpus):
+    def build_knowledge_graph(self, corpus=None, documents=None):
         logger.info(f"========{'Start Building':^20}========")
         logger.info(f"{'➖' * 30}")
 
-        with open(corpus, "r", encoding="utf-8") as f:
-            documents = json_repair.load(f)
+        if documents is None:
+            with open(corpus, "r", encoding="utf-8") as f:
+                documents = json_repair.load(f)
 
         self.process_all_documents(documents)
 

@@ -2,8 +2,8 @@
 import { ref, onMounted } from 'vue';
 import { ElButton, ElSelect, ElOption, ElMessage } from 'element-plus';
 import { getFileListApi, getIRCoTStatusApi, setIRCoTEnabledApi, type KnowledgeBaseFile } from '#/api/core/rag';
-import { useChat } from '#/composables/useChat';
 import ChatArea from '#/components/rag/ChatArea.vue';
+import { useChat } from '#/composables/useChat';
 
 const props = defineProps<{ kbId: string }>();
 
