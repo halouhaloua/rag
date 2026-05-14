@@ -8,7 +8,6 @@ import {
   Edit,
   Eye,
   FileText,
-  List,
   MoreHorizontal,
   RefreshCw,
   Trash2,
@@ -118,7 +117,7 @@ function handleCommand(command: string) {
             circle
             size="small"
             class="action-btn"
-            @click="emit('edit')"
+            @click.stop="emit('edit')"
           >
             <Edit style="width: 14px; height: 14px" />
           </ElButton>
@@ -129,13 +128,13 @@ function handleCommand(command: string) {
             size="small"
             class="action-btn delete-btn"
             :disabled="kb.kb_type === 'demo'"
-            @click="handleDelete"
+            @click.stop="handleDelete"
           >
             <Trash2 style="width: 14px; height: 14px" />
           </ElButton>
         </ElTooltip>
         <ElDropdown trigger="click" @command="handleCommand">
-          <ElButton circle size="small" class="action-btn">
+          <ElButton circle size="small" class="action-btn" @click.stop>
             <MoreHorizontal style="width: 14px; height: 14px" />
           </ElButton>
           <template #dropdown>

@@ -4,7 +4,6 @@ import glob
 import shutil
 import asyncio
 import pathlib
-import tempfile
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -26,6 +25,7 @@ from graphrag.rag.schema import (
 )
 
 path = pathlib.Path(__file__).parent.parent
+DATA_UPLOAD_DIR = path / "data" / "uploads"
 
 try:
     from graphrag.models.constructor import kt_gen as constructor
@@ -89,6 +89,16 @@ async def send_progress_update(client_id: str, stage: str, progress: int, messag
 def _clear_cache_files_sync(kb_id: str, file_id: str):
     try:
         cache_key = file_id
+        # 删除原始上传文件
+        upload_dir = DATA_UPLOAD_DIR / kb_id
+        if upload_dir.exists():
+            for fp in glob.glob(str(upload_dir / f"{cache_key}.*")):
+                try:
+                    if os.path.isfile(fp):
+                        os.remove(fp)
+                        logger.info(f"Removed uploaded file: {fp}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove uploaded file {fp}: {e}")
         faiss_cache_dir = path / f"retriever/faiss_cache_new/{cache_key}"
         if os.path.exists(faiss_cache_dir):
             shutil.rmtree(faiss_cache_dir)
@@ -208,22 +218,23 @@ async def upload_files_to_kb(
         file_ext = os.path.splitext(file.filename)[1].lower()
         file_size = len(content_bytes)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
-            tmp.write(content_bytes)
-            tmp_path = tmp.name
-
-        try:
-            if file_ext in [".csv", ".xls", ".xlsx"]:
-                text = await extract_text_from_spreadsheet(tmp_path, file_ext)
-            else:
-                text = await extract_text_from_document(tmp_path, file_ext)
-        finally:
-            os.unlink(tmp_path)
-
         from app.base_model import generate_nanoid
+        file_id = generate_nanoid()
+
+        # 保存原始文件到磁盘
+        upload_path = DATA_UPLOAD_DIR / kb_id
+        upload_path.mkdir(parents=True, exist_ok=True)
+        save_path = upload_path / f"{file_id}{file_ext}"
+        save_path.write_bytes(content_bytes)
+
+        # 直接从已保存的文件中提取文本
+        if file_ext in [".csv", ".xls", ".xlsx"]:
+            text = await extract_text_from_spreadsheet(str(save_path), file_ext)
+        else:
+            text = await extract_text_from_document(str(save_path), file_ext)
 
         file_record = KBFileModel(
-            id=generate_nanoid(),
+            id=file_id,
             kb_id=kb_id,
             filename=file.filename,
             content=text,
@@ -246,6 +257,7 @@ async def upload_files_to_kb(
             )
         )
 
+    await db.commit()
     return results
 
 

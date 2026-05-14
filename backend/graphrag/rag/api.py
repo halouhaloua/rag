@@ -16,7 +16,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.base_schema import ResponseModel
 
 from graphrag.rag.schema import (
     KnowledgeBaseCreate,
@@ -56,7 +55,6 @@ from graphrag.rag.db_service import (
 )
 from graphrag.rag.socket_manager import manager
 from utils.security import verify_access_token
-from loguru import logger
 
 router = APIRouter(prefix="/api", tags=["知识库管理"])
 ws_router = APIRouter(prefix="/api", tags=["知识图谱WebSocket"])
@@ -195,6 +193,64 @@ async def upload_kb_files(
         return FileUploadResponseWrapper(items=results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files",
+    response_model=KnowledgeBaseFileListResponse,
+    summary="文件列表",
+)
+async def list_kb_files(kb_id: str, db: AsyncSession = Depends(get_db)):
+    kb = await KnowledgeBaseService.get_by_id(db, kb_id)
+    if not kb:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    files = await KnowledgeBaseFileService.get_files_by_kb(db, kb_id)
+    return KnowledgeBaseFileListResponse(items=files, total=len(files))
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files/{file_id}",
+    response_model=KnowledgeBaseFileResponse,
+    summary="文件详情",
+)
+async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return f
+
+
+@router.put(
+    "/knowledge-base/{kb_id}/files/{file_id}/schema",
+    summary="更新文件Schema",
+)
+async def update_file_schema(
+    kb_id: str, file_id: str, data: FileSchemaUpdate, db: AsyncSession = Depends(get_db)
+):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    f.schema_json = data.schema_definition
+    await db.flush()
+    await db.commit()
+    return {"msg": "Schema更新成功"}
+
+
+@router.delete(
+    "/knowledge-base/{kb_id}/files/{file_id}",
+    summary="删除文件",
+)
+async def delete_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    from graphrag.rag.service import clear_cache_files
+    await clear_cache_files(kb_id, file_id)
+    await KnowledgeGraphService.delete_by_file(db, file_id)
+    success = await KnowledgeBaseFileService.delete(db, file_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return DeleteResponse(msg="文件删除成功")
 
 
 @router.put(

@@ -27,7 +27,7 @@ from core.user.schema import (
     UserProfileUpdateIn
 )
 from core.user.service import UserService
-from utils.security import get_current_user
+from utils.security import get_current_user, get_current_user_id
 
 router = APIRouter(prefix="/user", tags=["用户管理"])
 
@@ -238,6 +238,31 @@ async def update_user_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """更新用户个人信息"""
+    # 邮箱唯一性校验
+    if data.email:
+        if not await UserService.check_unique(db, field="email", value=data.email, exclude_id=user_id):
+            raise HTTPException(status_code=400, detail="邮箱已存在")
+    
+    # 手机号唯一性校验
+    if data.mobile:
+        if not await UserService.check_unique(db, field="mobile", value=data.mobile, exclude_id=user_id):
+            raise HTTPException(status_code=400, detail="手机号已存在")
+    
+    # 转换为UserUpdate
+    update_data = UserUpdate(**data.model_dump(exclude_unset=True))
+    user = await UserService.update(db, record_id=user_id, data=update_data)
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return _build_user_response(user)
+
+
+@router.patch("/profile", response_model=UserResponse, summary="更新个人设置")
+async def update_my_profile(
+    data: UserProfileUpdateIn,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """当前用户更新个人信息（从JWT自动获取用户ID）"""
     # 邮箱唯一性校验
     if data.email:
         if not await UserService.check_unique(db, field="email", value=data.email, exclude_id=user_id):

@@ -1,15 +1,15 @@
 <script lang="ts" setup>
-import type { KnowledgeBase } from '#/api/core/rag';
+import type { KnowledgeBase, KnowledgeBaseFile } from '#/api/core/rag';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { Edit } from '@vben/icons';
 
-import { ElButton, ElMessage, ElTabPane, ElTabs } from 'element-plus';
+import { ElButton, ElMessage, ElOption, ElSelect, ElTabPane, ElTabs } from 'element-plus';
 
-import { getKnowledgeBaseDetailApi } from '#/api/core/rag';
+import { getFileListApi, getKnowledgeBaseDetailApi } from '#/api/core/rag';
 
 import FilesTab from './modules/files.vue';
 import GraphTab from './modules/graph.vue';
@@ -24,6 +24,17 @@ const kb = ref<KnowledgeBase | null>(null);
 const loading = ref(true);
 const activeTab = ref('files');
 
+const graphFiles = ref<KnowledgeBaseFile[]>([]);
+const graphSelectedFileId = ref('');
+
+async function loadGraphFiles() {
+  const res = await getFileListApi(kbId.value);
+  graphFiles.value = res.items.filter((f) => f.has_graph);
+  if (graphFiles.value.length > 0 && !graphSelectedFileId.value) {
+    graphSelectedFileId.value = graphFiles.value[0]!.id;
+  }
+}
+
 onMounted(async () => {
   if (!kbId.value) {
     router.push('/rag/knowledge-base');
@@ -36,6 +47,12 @@ onMounted(async () => {
     router.push('/rag/knowledge-base');
   } finally {
     loading.value = false;
+  }
+});
+
+watch(activeTab, (tab: string) => {
+  if (tab === 'graph' && graphFiles.value.length === 0) {
+    loadGraphFiles();
   }
 });
 </script>
@@ -54,13 +71,32 @@ onMounted(async () => {
             <span>类型: {{ kb.kb_type === 'demo' ? '演示' : '用户' }}</span>
           </div>
         </div>
-        <ElButton
-          type="primary"
-          :icon="Edit"
-          @click="$router.push('/rag/knowledge-base')"
-        >
-          返回列表
-        </ElButton>
+        <div class="header-actions">
+          <div v-if="activeTab === 'graph'" class="graph-file-selector">
+            <ElSelect
+              v-model="graphSelectedFileId"
+              placeholder="选择文件..."
+              style="width: 200px"
+            >
+              <ElOption
+                v-for="f in graphFiles"
+                :key="f.id"
+                :label="f.filename"
+                :value="f.id"
+              />
+            </ElSelect>
+            <span v-if="graphFiles.length === 0" class="no-data-hint">
+              暂无已构建图谱的文件
+            </span>
+          </div>
+          <ElButton
+            type="primary"
+            :icon="Edit"
+            @click="$router.push('/rag/knowledge-base')"
+          >
+            返回列表
+          </ElButton>
+        </div>
       </div>
 
       <ElTabs v-model="activeTab" class="kb-tabs">
@@ -68,7 +104,11 @@ onMounted(async () => {
           <FilesTab :kb-id="kb.id" />
         </ElTabPane>
         <ElTabPane label="知识图谱" name="graph">
-          <GraphTab :kb-id="kb.id" />
+          <GraphTab
+            :kb-id="kb.id"
+            :files="graphFiles"
+            :selected-file-id="graphSelectedFileId"
+          />
         </ElTabPane>
         <ElTabPane label="三元组管理" name="triple">
           <TripleTab :kb-id="kb.id" />
@@ -117,6 +157,19 @@ onMounted(async () => {
   margin: 0 8px;
 }
 
+.header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+  align-items: center;
+}
+
+.no-data-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
 .kb-tabs {
   display: flex;
   flex: 1;
@@ -125,6 +178,10 @@ onMounted(async () => {
   overflow: hidden;
   background: var(--el-bg-color-overlay);
   border-radius: 8px;
+}
+
+.kb-tabs :deep(.el-tabs__header) {
+  margin: 0 !important;
 }
 
 .kb-tabs :deep(.el-tabs__content) {
