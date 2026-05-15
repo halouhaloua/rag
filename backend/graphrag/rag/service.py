@@ -14,13 +14,11 @@ from graphrag.rag.socket_manager import manager
 from graphrag.config import get_config
 
 from graphrag.rag.db_service import (
-    KnowledgeBaseService,
     KnowledgeBaseFileService,
     KnowledgeGraphService,
 )
 from graphrag.rag.model import KnowledgeBaseFile as KBFileModel, KnowledgeGraph as KGraphModel
 from graphrag.rag.schema import (
-    KnowledgeBaseFileResponse,
     FileUploadResponse,
 )
 
@@ -713,6 +711,35 @@ def convert_standard_format(graph_data: Dict) -> Dict:
     return {"nodes": nodes, "links": edges, "categories": categories,
             "stats": {"total_nodes": len(nodes), "total_edges": len(edges),
                       "displayed_nodes": len(nodes), "displayed_edges": len(edges)}}
+
+
+# ─── Paginated Node/Edge queries ───
+
+
+async def get_file_graph_nodes_service(
+    file_id: str, page: int, page_size: int, db: AsyncSession
+):
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        return {"items": [], "total": 0}
+    vis = await prepare_graph_visualization_from_data(graph_record.graph_data)
+    nodes = vis.get("nodes", [])
+    total = len(nodes)
+    start = (page - 1) * page_size
+    return {"items": nodes[start : start + page_size], "total": total}
+
+
+async def get_file_graph_edges_service(
+    file_id: str, page: int, page_size: int, db: AsyncSession
+):
+    graph_record = await KnowledgeGraphService.get_by_file(db, file_id)
+    if not graph_record or not graph_record.graph_data:
+        return {"items": [], "total": 0}
+    vis = await prepare_graph_visualization_from_data(graph_record.graph_data)
+    edges = vis.get("links", [])
+    total = len(edges)
+    start = (page - 1) * page_size
+    return {"items": edges[start : start + page_size], "total": total}
 
 
 # ─── Triple Management Helpers ───

@@ -324,7 +324,7 @@ watch(
         </div>
       </div>
     </div>
-    <div class="disclaimer">AI 生成内容仅供参考，可能不准确。</div>
+    <!-- <div class="disclaimer">AI 生成内容仅供参考，可能不准确。</div> -->
   </div>
 </template>
 

@@ -174,7 +174,9 @@ async function batchDelete(data: SystemFileManagerApi.BatchDeleteParams) {
  * @param path 文件路径
  */
 function getDownloadUrl(path: string): string {
-  return `/basic-api/api/core/file_manager/file/download?path=${encodeURIComponent(path)}`;
+  const accessStore = useAccessStore();
+  const token = accessStore.accessToken;
+  return `/basic-api/api/core/file_manager/file/download?path=${encodeURIComponent(path)}&token=${token}`;
 }
 
 /**

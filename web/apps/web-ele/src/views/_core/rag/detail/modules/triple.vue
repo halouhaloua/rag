@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { GraphData, KnowledgeBaseFile } from '#/api/core/rag';
-import { computed, onMounted, ref } from 'vue';
+import type { GraphLink, GraphNode, KnowledgeBaseFile, PaginatedGraphItems } from '#/api/core/rag';
+import { onMounted, ref, watch } from 'vue';
 import {
   ElButton,
   ElDialog,
@@ -10,6 +10,7 @@ import {
   ElMessage,
   ElMessageBox,
   ElOption,
+  ElPagination,
   ElSelect,
   ElTable,
   ElTableColumn,
@@ -25,7 +26,8 @@ import {
   deleteGraphEdgeApi,
   deleteGraphNodeApi,
   getFileListApi,
-  getGraphDataApi,
+  getGraphEdgesApi,
+  getGraphNodesApi,
   updateGraphEdgeApi,
   updateNodeCategoryApi,
 } from '#/api/core/rag';
@@ -34,11 +36,21 @@ const props = defineProps<{ kbId: string }>();
 
 const files = ref<KnowledgeBaseFile[]>([]);
 const selectedFileId = ref('');
-const graphData = ref<GraphData | null>(null);
-const loading = ref(false);
+const loadingNodes = ref(false);
+const loadingEdges = ref(false);
 const activeSubTab = ref('nodes');
 
-// ─── Load files & graph ───
+// ─── Paginated nodes ───
+const nodeRes = ref<PaginatedGraphItems<GraphNode>>({ items: [], total: 0 });
+const nodePage = ref(1);
+const nodePageSize = ref(20);
+
+// ─── Paginated edges ───
+const edgeRes = ref<PaginatedGraphItems<GraphLink>>({ items: [], total: 0 });
+const edgePage = ref(1);
+const edgePageSize = ref(20);
+
+// ─── Load files ───
 
 async function loadFiles() {
   const res = await getFileListApi(props.kbId);
@@ -48,33 +60,33 @@ async function loadFiles() {
   }
 }
 
-async function loadGraph(fileId: string) {
+async function loadNodes(fileId: string) {
   if (!fileId) return;
-  loading.value = true;
+  loadingNodes.value = true;
   try {
-    const res = await getGraphDataApi(props.kbId, fileId);
-    graphData.value = res;
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载图谱数据失败');
-    graphData.value = null;
+    nodeRes.value = await getGraphNodesApi(props.kbId, fileId, nodePage.value, nodePageSize.value);
+  } catch {
+    ElMessage.error('加载节点列表失败');
+    nodeRes.value = { items: [], total: 0 };
   } finally {
-    loading.value = false;
+    loadingNodes.value = false;
+  }
+}
+
+async function loadEdges(fileId: string) {
+  if (!fileId) return;
+  loadingEdges.value = true;
+  try {
+    edgeRes.value = await getGraphEdgesApi(props.kbId, fileId, edgePage.value, edgePageSize.value);
+  } catch {
+    ElMessage.error('加载边列表失败');
+    edgeRes.value = { items: [], total: 0 };
+  } finally {
+    loadingEdges.value = false;
   }
 }
 
 // ─── Derived data ───
-
-const allCategories = computed(() => {
-  const cats = new Set<string>();
-  if (!graphData.value) return [];
-  graphData.value.nodes.forEach((n) => cats.add(n.category));
-  graphData.value.categories?.forEach((c) => cats.add(c.name));
-  return [...cats].sort();
-});
-
-const selectedFileName = computed(
-  () => files.value.find((f) => f.id === selectedFileId.value)?.filename || '',
-);
 
 // ─── Node operations ───
 
@@ -93,7 +105,8 @@ async function handleAddNode() {
     ElMessage.success('节点添加成功');
     addNodeDialogVisible.value = false;
     addNodeForm.value = { name: '', category: 'entity' };
-    await loadGraph(selectedFileId.value);
+    nodePage.value = 1;
+    await loadNodes(selectedFileId.value);
   } catch (error: any) {
     ElMessage.error(error.message || '添加节点失败');
   }
@@ -121,7 +134,7 @@ async function handleEditCategory() {
     );
     ElMessage.success('类别更新成功');
     editCategoryDialogVisible.value = false;
-    await loadGraph(selectedFileId.value);
+    await loadNodes(selectedFileId.value);
   } catch (error: any) {
     ElMessage.error(error.message || '更新类别失败');
   }
@@ -136,7 +149,10 @@ async function handleDeleteNode(nodeName: string) {
     );
     await deleteGraphNodeApi(props.kbId, selectedFileId.value, nodeName);
     ElMessage.success('节点删除成功');
-    await loadGraph(selectedFileId.value);
+    nodePage.value = 1;
+    await loadNodes(selectedFileId.value);
+    edgePage.value = 1;
+    await loadEdges(selectedFileId.value);
   } catch {
     // cancelled or error
   }
@@ -165,7 +181,8 @@ async function handleAddEdge() {
     ElMessage.success('边添加成功');
     addEdgeDialogVisible.value = false;
     addEdgeForm.value = { source: '', relation: '', target: '', source_category: 'entity', target_category: 'entity' };
-    await loadGraph(selectedFileId.value);
+    edgePage.value = 1;
+    await loadEdges(selectedFileId.value);
   } catch (error: any) {
     ElMessage.error(error.message || '添加边失败');
   }
@@ -180,7 +197,8 @@ async function handleDeleteEdge(source: string, relation: string, target: string
     );
     await deleteGraphEdgeApi(props.kbId, selectedFileId.value, source, relation, target);
     ElMessage.success('边删除成功');
-    await loadGraph(selectedFileId.value);
+    edgePage.value = 1;
+    await loadEdges(selectedFileId.value);
   } catch {
     // cancelled or error
   }
@@ -210,13 +228,6 @@ function openEditEdge(row: { source: string; name: string; target: string }) {
     source_category: 'entity',
     target_category: 'entity',
   };
-  // auto-detect current categories from graph data
-  if (graphData.value) {
-    const sn = graphData.value.nodes.find((n) => n.name === row.source);
-    const tn = graphData.value.nodes.find((n) => n.name === row.target);
-    if (sn) editEdgeForm.value.source_category = sn.category;
-    if (tn) editEdgeForm.value.target_category = tn.category;
-  }
   editEdgeDialogVisible.value = true;
 }
 
@@ -238,18 +249,29 @@ async function handleEditEdge() {
     });
     ElMessage.success('边编辑成功');
     editEdgeDialogVisible.value = false;
-    await loadGraph(selectedFileId.value);
+    edgePage.value = 1;
+    await loadEdges(selectedFileId.value);
   } catch (error: any) {
     ElMessage.error(error.message || '编辑边失败');
   }
 }
 
-// ─── Watch file selection ───
-
-import { watch } from 'vue';
+// ─── Watchers ───
 
 watch(selectedFileId, (fileId) => {
-  if (fileId) loadGraph(fileId);
+  if (!fileId) return;
+  nodePage.value = 1;
+  edgePage.value = 1;
+  loadNodes(fileId);
+  loadEdges(fileId);
+});
+
+watch([nodePage, nodePageSize], () => {
+  if (selectedFileId.value) loadNodes(selectedFileId.value);
+});
+
+watch([edgePage, edgePageSize], () => {
+  if (selectedFileId.value) loadEdges(selectedFileId.value);
 });
 
 onMounted(() => {
@@ -279,92 +301,114 @@ onMounted(() => {
       </span>
     </div>
 
-    <div v-if="graphData && !loading" class="triple-content">
+    <div class="triple-content">
       <div class="graph-summary">
-        <span>节点: {{ graphData.stats?.total_nodes ?? 0 }}</span>
+        <span>节点: {{ nodeRes.total }}</span>
         <span class="sep">|</span>
-        <span>边: {{ graphData.stats?.total_edges ?? 0 }}</span>
+        <span>边: {{ edgeRes.total }}</span>
       </div>
 
       <ElTabs v-model="activeSubTab" class="sub-tabs">
         <!-- ─── 节点管理 ─── -->
         <ElTabPane label="节点管理" name="nodes">
-          <div class="toolbar">
-            <ElButton type="primary" size="small" :icon="Plus" @click="addNodeDialogVisible = true">
-              添加节点
-            </ElButton>
+          <div class="tab-body">
+            <div class="toolbar">
+              <ElButton type="primary" size="small" :icon="Plus" @click="addNodeDialogVisible = true">
+                添加节点
+              </ElButton>
+            </div>
+            <ElTable :data="nodeRes.items" border size="small" max-height="400" v-loading="loadingNodes">
+              <ElTableColumn prop="name" label="名称" min-width="160" show-overflow-tooltip />
+              <ElTableColumn prop="category" label="类别" width="140">
+                <template #default="{ row }">
+                  <ElTag :type="row.category === 'attribute' ? 'warning' : 'primary'" size="small">
+                    {{ row.category }}
+                  </ElTag>
+                </template>
+              </ElTableColumn>
+              <ElTableColumn label="操作" width="180" fixed="right">
+                <template #default="{ row }">
+                  <ElButton
+                    size="small"
+                    type="primary"
+                    link
+                    @click="openEditCategory(row.name, row.category)"
+                  >
+                    编辑分类
+                  </ElButton>
+                  <ElButton
+                    size="small"
+                    type="danger"
+                    link
+                    :icon="Trash2"
+                    @click="handleDeleteNode(row.name)"
+                  >
+                    删除
+                  </ElButton>
+                </template>
+              </ElTableColumn>
+            </ElTable>
+            <div class="pagination-wrap">
+              <ElPagination
+                v-model:current-page="nodePage"
+                v-model:page-size="nodePageSize"
+                :total="nodeRes.total"
+                :page-sizes="[10, 20, 50, 100]"
+                layout="total, sizes, prev, pager, next"
+                small
+              />
+            </div>
           </div>
-          <ElTable :data="graphData.nodes" border size="small" max-height="400">
-            <ElTableColumn prop="name" label="名称" min-width="160" show-overflow-tooltip />
-            <ElTableColumn prop="category" label="类别" width="140">
-              <template #default="{ row }">
-                <ElTag :type="row.category === 'attribute' ? 'warning' : 'primary'" size="small">
-                  {{ row.category }}
-                </ElTag>
-              </template>
-            </ElTableColumn>
-            <ElTableColumn label="操作" width="180" fixed="right">
-              <template #default="{ row }">
-                <ElButton
-                  size="small"
-                  type="primary"
-                  link
-                  @click="openEditCategory(row.name, row.category)"
-                >
-                  编辑分类
-                </ElButton>
-                <ElButton
-                  size="small"
-                  type="danger"
-                  link
-                  :icon="Trash2"
-                  @click="handleDeleteNode(row.name)"
-                >
-                  删除
-                </ElButton>
-              </template>
-            </ElTableColumn>
-          </ElTable>
         </ElTabPane>
 
         <!-- ─── 边管理 ─── -->
         <ElTabPane label="边管理" name="edges">
-          <div class="toolbar">
-            <ElButton type="primary" size="small" :icon="Plus" @click="addEdgeDialogVisible = true">
-              添加边
-            </ElButton>
+          <div class="tab-body">
+            <div class="toolbar">
+              <ElButton type="primary" size="small" :icon="Plus" @click="addEdgeDialogVisible = true">
+                添加边
+              </ElButton>
+            </div>
+            <ElTable :data="edgeRes.items" border size="small" max-height="400" v-loading="loadingEdges">
+              <ElTableColumn prop="source" label="源节点" min-width="160" show-overflow-tooltip />
+              <ElTableColumn prop="name" label="关系" width="140" />
+              <ElTableColumn prop="target" label="目标节点" min-width="160" show-overflow-tooltip />
+              <ElTableColumn label="操作" width="160" fixed="right">
+                <template #default="{ row }">
+                  <ElButton
+                    size="small"
+                    type="primary"
+                    link
+                    @click="openEditEdge(row)"
+                  >
+                    编辑
+                  </ElButton>
+                  <ElButton
+                    size="small"
+                    type="danger"
+                    link
+                    :icon="Trash2"
+                    @click="handleDeleteEdge(row.source, row.name, row.target)"
+                  >
+                    删除
+                  </ElButton>
+                </template>
+              </ElTableColumn>
+            </ElTable>
+            <div class="pagination-wrap">
+              <ElPagination
+                v-model:current-page="edgePage"
+                v-model:page-size="edgePageSize"
+                :total="edgeRes.total"
+                :page-sizes="[10, 20, 50, 100]"
+                layout="total, sizes, prev, pager, next"
+                small
+              />
+            </div>
           </div>
-          <ElTable :data="graphData.links" border size="small" max-height="400">
-            <ElTableColumn prop="source" label="源节点" min-width="160" show-overflow-tooltip />
-            <ElTableColumn prop="name" label="关系" width="140" />
-            <ElTableColumn prop="target" label="目标节点" min-width="160" show-overflow-tooltip />
-            <ElTableColumn label="操作" width="160" fixed="right">
-              <template #default="{ row }">
-                <ElButton
-                  size="small"
-                  type="primary"
-                  link
-                  @click="openEditEdge(row)"
-                >
-                  编辑
-                </ElButton>
-                <ElButton
-                  size="small"
-                  type="danger"
-                  link
-                  :icon="Trash2"
-                  @click="handleDeleteEdge(row.source, row.name, row.target)"
-                >
-                  删除
-                </ElButton>
-              </template>
-            </ElTableColumn>
-          </ElTable>
         </ElTabPane>
       </ElTabs>
     </div>
-
-    <div v-else-if="loading" class="loading-hint">加载中...</div>
 
     <!-- ─── Add Node Dialog ─── -->
     <ElDialog v-model="addNodeDialogVisible" title="添加节点" width="420px">
@@ -450,7 +494,7 @@ onMounted(() => {
         <ElButton type="primary" @click="handleEditEdge">确定</ElButton>
       </template>
     </ElDialog>
-  </div>
+</div>
 </template>
 
 <style scoped>
@@ -510,12 +554,12 @@ onMounted(() => {
 .sub-tabs :deep(.el-tabs__content) {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .sub-tabs :deep(.el-tab-pane) {
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .toolbar {
@@ -524,11 +568,36 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tab-body .el-table {
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 8px 0;
+}
+
 .loading-hint {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 200px;
   color: var(--el-text-color-secondary);
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
 }
 </style>

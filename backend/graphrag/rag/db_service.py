@@ -16,9 +16,14 @@ class KnowledgeBaseService(
 
     @classmethod
     async def get_list_with_file_count(
-        cls, db: AsyncSession, page: int = 1, page_size: int = 200
+        cls, db: AsyncSession, page: int = 1, page_size: int = 200, name: str = None
     ):
-        items, total = await cls.get_list(db, page=page, page_size=page_size)
+        from sqlalchemy import func as sa_func
+
+        filters = []
+        if name:
+            filters.append(cls.model.name.ilike(f"%{name}%"))
+        items, total = await cls.get_list(db, page=page, page_size=page_size, filters=filters)
         for item in items:
             item.file_count = 0
         if items:

@@ -5,14 +5,14 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.database import get_db, AsyncSessionLocal
-from graphrag.retrieval.schema import (
+from graphrag.chat.schema import (
     ChatConversationCreate,
     ChatMessageCreate,
     ChatConversationResponse,
     ChatMessageResponse,
     ChatRequest,
 )
-from graphrag.retrieval.service import (
+from graphrag.chat.service import (
     ChatConversationService,
     ChatMessageService,
     ChatConversation,

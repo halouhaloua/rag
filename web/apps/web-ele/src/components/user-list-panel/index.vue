@@ -226,8 +226,8 @@ watch(
 
 // 初始化加载
 onMounted(() => {
-  userLoading.value = true;
   if (props.autoLoad) {
+    userLoading.value = true;
     loadUsers();
   }
 });

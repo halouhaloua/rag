@@ -6,10 +6,10 @@ import { ref, watch, computed } from 'vue';
 import {
   ElButton,
   ElCard,
-  ElCheckbox,
   ElEmpty,
   ElInput,
   ElMessage,
+  ElPagination,
   ElScrollbar,
   ElSkeleton,
   ElSkeletonItem,
@@ -32,42 +32,24 @@ const saving = ref(false);
 const allKbs = ref<KnowledgeBase[]>([]);
 const selectedMap = ref<Record<string, boolean>>({});
 const searchQuery = ref('');
-
-const filteredKbs = computed(() => {
-  if (!searchQuery.value) return allKbs.value;
-  const q = searchQuery.value.toLowerCase();
-  return allKbs.value.filter((kb) => kb.name.toLowerCase().includes(q));
-});
-
-const allSelected = computed(
-  () =>
-    allKbs.value.length > 0 &&
-    allKbs.value.every((kb) => selectedMap.value[kb.id]),
-);
+const page = ref(1);
+const pageSize = ref(20);
+const total = ref(0);
 
 const selectedCount = computed(
   () => Object.values(selectedMap.value).filter(Boolean).length,
 );
 
-function toggleAll(checked: boolean) {
-  const newMap: Record<string, boolean> = {};
-  if (checked) {
-    allKbs.value.forEach((kb) => {
-      newMap[kb.id] = true;
-    });
-  }
-  selectedMap.value = { ...newMap };
-}
-
 async function loadData() {
   if (!props.role?.id) return;
   loading.value = true;
   try {
-    const [allRes, roleKbsRes] = await Promise.all([
-      getKnowledgeBaseListApi({ page: 1, pageSize: 500 }),
+    const [listRes, roleKbsRes] = await Promise.all([
+      getKnowledgeBaseListApi({ page: page.value, pageSize: pageSize.value, name: searchQuery.value || undefined }),
       getRoleKbPermissionsApi(props.role.id),
     ]);
-    allKbs.value = allRes.items ?? [];
+    allKbs.value = listRes.items ?? [];
+    total.value = listRes.total;
     const map: Record<string, boolean> = {};
     for (const kb of roleKbsRes.items ?? []) {
       map[kb.id] = true;
@@ -85,6 +67,7 @@ watch(
   () => props.role?.id,
   (id) => {
     searchQuery.value = '';
+    page.value = 1;
     if (id) {
       loadData();
     } else {
@@ -94,16 +77,34 @@ watch(
   },
 );
 
+watch([page, pageSize], () => {
+  if (props.role?.id) loadData();
+});
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(searchQuery, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    page.value = 1;
+    if (props.role?.id) loadData();
+  }, 300);
+});
+
 function toggleKb(kbId: string, checked: boolean) {
   selectedMap.value = { ...selectedMap.value, [kbId]: checked };
 }
 
 function selectAll() {
-  toggleAll(true);
+  const newMap: Record<string, boolean> = {};
+  allKbs.value.forEach((kb) => { newMap[kb.id] = true; });
+  selectedMap.value = { ...selectedMap.value, ...newMap };
 }
 
 function unselectAll() {
-  toggleAll(false);
+  const newMap = { ...selectedMap.value };
+  allKbs.value.forEach((kb) => { delete newMap[kb.id]; });
+  selectedMap.value = newMap;
 }
 
 async function saveSelection() {
@@ -215,15 +216,15 @@ async function saveSelection() {
               size="small"
             />
             <span class="text-xs text-gray-400">
-              已选 {{ selectedCount }}/{{ allKbs.length }}
+              已选 {{ selectedCount }}/{{ total }}
             </span>
           </div>
           <div class="flex gap-1">
             <ElButton link type="primary" size="small" @click="selectAll">
-              全选
+              全选当前页
             </ElButton>
             <ElButton link type="primary" size="small" @click="unselectAll">
-              取消全选
+              取消当前页
             </ElButton>
           </div>
         </div>
@@ -241,7 +242,7 @@ async function saveSelection() {
         >
           <ElScrollbar class="flex-1">
             <div
-              v-if="filteredKbs.length === 0"
+              v-if="allKbs.length === 0"
               class="flex items-center justify-center py-12"
             >
               <span class="text-xs text-gray-400">
@@ -250,7 +251,7 @@ async function saveSelection() {
             </div>
             <div v-else class="p-2">
               <div
-                v-for="kb in filteredKbs"
+                v-for="kb in allKbs"
                 :key="kb.id"
                 class="flex h-[36px] cursor-pointer items-center rounded-[6px] px-2 transition-colors hover:bg-[var(--el-fill-color-light)]"
                 @click="toggleKb(kb.id, !selectedMap[kb.id])"
@@ -289,6 +290,16 @@ async function saveSelection() {
               </div>
             </div>
           </ElScrollbar>
+          <div class="flex justify-end px-2 py-2">
+            <ElPagination
+              v-model:current-page="page"
+              v-model:page-size="pageSize"
+              :total="total"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next"
+              small
+            />
+          </div>
         </ElCard>
       </div>
     </div>

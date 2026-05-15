@@ -129,6 +129,7 @@ async function handleRemoveUsers() {
           :filterable="true"
           :multiple="true"
           :selectable="true"
+          :auto-load="true"
           :show-selected-tags="false"
           :show-border="false"
           @user-select="handleUserSelect"

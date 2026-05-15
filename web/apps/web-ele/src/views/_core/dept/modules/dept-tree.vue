@@ -12,7 +12,6 @@ import {
   ElInput,
   ElMessage,
   ElMessageBox,
-  ElSkeleton,
   ElSkeletonItem,
   ElTooltip,
 } from 'element-plus';
@@ -47,8 +46,8 @@ const deptFormModalRef = ref<InstanceType<typeof DeptFormModal>>();
  * 加载顶级部门数据（只加载第一级）
  */
 async function fetchDeptList() {
+  loading.value = true;
   try {
-    loading.value = true;
     // 只获取顶级部门
     const data = await getDeptByParentApi();
     treeData.value = Array.isArray(data) ? data : [];
@@ -61,6 +60,8 @@ async function fetchDeptList() {
         emit('select', [firstDept.id], hasChildren(firstDept));
       }
     }
+  } catch (e) {
+    console.error('Failed to load departments:', e);
   } finally {
     loading.value = false;
   }
@@ -363,33 +364,29 @@ onMounted(() => {
 
     <!-- 部门树列表 -->
     <div class="flex-1 overflow-auto">
-      <ElSkeleton :loading="loading || isSearching" animated :count="8">
-        <template #template>
-          <div class="space-y-1">
-            <div v-for="i in 8" :key="i" class="dept-skeleton-item">
-              <ElSkeletonItem
-                variant="text"
-                style="width: 100%; height: 40px"
-              />
-            </div>
-          </div>
-        </template>
-        <template #default>
-          <div class="space-y-2">
-            <div
-              v-for="(item, index) in flattenedTree"
-              :key="`${item.node.id}-${index}`"
-              class="dept-item flex cursor-pointer items-center rounded-[8px] px-3 py-2 transition-colors"
-              :class="[
-                selectedDeptId === item.node.id
-                  ? 'bg-primary/15 dark:bg-accent text-primary'
-                  : 'hover:bg-[var(--el-fill-color-light)]',
-              ]"
-              :style="{ paddingLeft: `calc(12px + ${item.level * 20}px)` }"
-              @mouseenter="hoveredDeptId = item.node.id"
-              @mouseleave="hoveredDeptId = undefined"
-              @click="onDeptSelect(item.node)"
-            >
+      <div v-if="loading || isSearching" class="space-y-1">
+        <div v-for="i in 8" :key="i" class="dept-skeleton-item">
+          <ElSkeletonItem
+            variant="text"
+            style="width: 100%; height: 40px"
+          />
+        </div>
+      </div>
+      <div v-else class="space-y-2">
+        <div
+          v-for="(item, index) in flattenedTree"
+          :key="`${item.node.id}-${index}`"
+          class="dept-item flex cursor-pointer items-center rounded-[8px] px-3 py-2 transition-colors"
+          :class="[
+            selectedDeptId === item.node.id
+              ? 'bg-primary/15 dark:bg-accent text-primary'
+              : 'hover:bg-[var(--el-fill-color-light)]',
+          ]"
+          :style="{ paddingLeft: `calc(12px + ${item.level * 20}px)` }"
+          @mouseenter="hoveredDeptId = item.node.id"
+          @mouseleave="hoveredDeptId = undefined"
+          @click="onDeptSelect(item.node)"
+        >
               <div class="flex min-w-0 flex-1 items-center gap-1">
                 <!-- 展开/折叠按钮 -->
                 <div
@@ -458,10 +455,8 @@ onMounted(() => {
                   <IconifyIcon icon="ep:delete" class="size-4" />
                 </ElButton>
               </div>
-            </div>
-          </div>
-        </template>
-      </ElSkeleton>
+        </div>
+      </div>
     </div>
   </ElCard>
 </template>

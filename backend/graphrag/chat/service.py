@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.base_service import BaseService
-from graphrag.retrieval.model import ChatConversation, ChatMessage
-from graphrag.retrieval.schema import ChatConversationCreate, ChatMessageCreate
+from graphrag.chat.model import ChatConversation, ChatMessage
+from graphrag.chat.schema import ChatConversationCreate, ChatMessageCreate
 
 
 class ChatConversationService(

@@ -102,6 +102,7 @@ export interface QuestionResult {
 export async function getKnowledgeBaseListApi(params?: {
   page?: number;
   pageSize?: number;
+  name?: string;
 }) {
   return requestClient.get<KnowledgeBaseListResult>(
     '/rag/api/knowledge-bases',
@@ -201,6 +202,35 @@ export async function constructGraphApi(
 export async function getGraphDataApi(kbId: string, fileId: string) {
   return requestClient.get<GraphData>(
     `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph`,
+  );
+}
+
+export interface PaginatedGraphItems<T> {
+  items: T[];
+  total: number;
+}
+
+export async function getGraphNodesApi(
+  kbId: string,
+  fileId: string,
+  page: number,
+  pageSize: number,
+) {
+  return requestClient.get<PaginatedGraphItems<GraphNode>>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/nodes`,
+    { params: { page, pageSize } },
+  );
+}
+
+export async function getGraphEdgesApi(
+  kbId: string,
+  fileId: string,
+  page: number,
+  pageSize: number,
+) {
+  return requestClient.get<PaginatedGraphItems<GraphLink>>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/graph/edges`,
+    { params: { page, pageSize } },
   );
 }
 

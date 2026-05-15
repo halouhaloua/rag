@@ -47,6 +47,8 @@ from graphrag.rag.service import (
     delete_graph_node_service,
     delete_graph_edge_service,
     update_graph_edge_service,
+    get_file_graph_nodes_service,
+    get_file_graph_edges_service,
 )
 from graphrag.rag.db_service import (
     KnowledgeBaseService,
@@ -116,6 +118,7 @@ async def create_knowledge_base(
 async def list_knowledge_bases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=200, ge=1, le=500, alias="pageSize"),
+    name: str = Query(default=None, description="知识库名称搜索"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -131,6 +134,8 @@ async def list_knowledge_bases(
                 KnowledgeBaseService.model.is_deleted == False,
             )
         )
+        if name:
+            base_query = base_query.where(KnowledgeBaseService.model.name.ilike(f"%{name}%"))
         count_result = await db.execute(sa_select(sa_func.count()).select_from(base_query.subquery()))
         total = count_result.scalar() or 0
         offset = (page - 1) * page_size
@@ -143,7 +148,7 @@ async def list_knowledge_bases(
         items = list(result.scalars().all())
     else:
         items, total = await KnowledgeBaseService.get_list_with_file_count(
-            db, page=page, page_size=page_size
+            db, page=page, page_size=page_size, name=name
         )
 
     for item in items:
@@ -399,6 +404,50 @@ async def get_file_graph(kb_id: str, file_id: str, db: AsyncSession = Depends(ge
     if not f.has_graph:
         raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
     return await get_file_graph_service(file_id, db)
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/nodes",
+    summary="分页获取节点列表",
+)
+async def get_file_graph_nodes(
+    kb_id: str,
+    file_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=500, alias="pageSize"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    return await get_file_graph_nodes_service(file_id, page, page_size, db)
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files/{file_id}/graph/edges",
+    summary="分页获取边列表",
+)
+async def get_file_graph_edges(
+    kb_id: str,
+    file_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=500, alias="pageSize"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.has_graph:
+        raise HTTPException(status_code=400, detail="该文件尚未构建图谱")
+    return await get_file_graph_edges_service(file_id, page, page_size, db)
 
 
 # ──────────────────────────────────────────────
