@@ -29,6 +29,7 @@ import { deleteItem, getDownloadUrl, getFileStreamUrl } from '#/api/core/file';
 
 import { useFileManager } from '../composables/useFileManager';
 import RenameDialog from './RenameDialog.vue';
+import FilePreviewDialog from '#/components/FilePreviewDialog.vue';
 
 const {
   currentFolderId,
@@ -42,6 +43,7 @@ const {
 } = useFileManager();
 
 const renameDialogVisible = ref(false);
+const previewDialogRef = ref<InstanceType<typeof FilePreviewDialog>>();
 const currentItem = ref<any>(null);
 const tableRef = ref<InstanceType<typeof ElTable>>();
 
@@ -128,21 +130,20 @@ const getFileIcon = (type: string, ext?: string) => {
 
 const handleItemClick = (item: any) => {
   console.log('Clicked item:', item);
-  // 尝试兼容驼峰命名，防止请求库自动转换
   const type = item.file_type || item.fileType || item.type;
 
   if (type === 'folder') {
     navigateToFolder(item.id, item.name);
   } else if (isImage(item.file_ext)) {
-    // 收集当前列表中的所有图片，构建预览列表
     const images = fileList.value.filter((f) => isImage(f.file_ext));
     previewUrlList.value = images.map((img) => getFileStreamUrl(img.id!));
 
-    // 找到当前点击图片的索引
     const index = images.findIndex((img) => img.id === item.id);
     previewInitialIndex.value = index === -1 ? 0 : index;
 
     previewVisible.value = true;
+  } else {
+    previewDialogRef.value?.open(item);
   }
 };
 
@@ -406,6 +407,8 @@ const formatSize = (size?: number) => {
     </div>
 
     <RenameDialog v-model:visible="renameDialogVisible" :item="currentItem" />
+
+    <FilePreviewDialog ref="previewDialogRef" />
 
     <ImageViewer
       v-if="previewVisible"

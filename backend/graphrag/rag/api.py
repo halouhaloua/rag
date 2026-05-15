@@ -1,6 +1,8 @@
 from typing import List, Optional
 import json
-from urllib.parse import parse_qs
+import mimetypes
+import pathlib
+from urllib.parse import parse_qs, quote
 
 from fastapi import (
     APIRouter,
@@ -12,7 +14,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -37,6 +39,7 @@ from graphrag.rag.schema import (
 )
 from graphrag.rag.service import (
     GRAPHRAG_AVAILABLE,
+    DATA_UPLOAD_DIR,
     upload_files_to_kb,
     construct_file_graph_service,
     ask_file_question_stream,
@@ -287,6 +290,52 @@ async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_d
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
     return f
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files/{file_id}/preview",
+    summary="文件预览（PDF/Word/文本）",
+)
+async def preview_kb_file(
+    kb_id: str, file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    ext = f.file_type or ".bin"
+    file_path = DATA_UPLOAD_DIR / kb_id / f"{file_id}{ext}"
+    if file_path.exists():
+        media_type, _ = mimetypes.guess_type(str(file_path))
+        disposition = f"inline; filename*=UTF-8''{quote(f.filename)}"
+        return FileResponse(
+            str(file_path),
+            media_type=media_type or "application/octet-stream",
+            headers={"Content-Disposition": disposition},
+        )
+    content = f.content or "(无内容)"
+    media_type = "text/plain; charset=utf-8"
+    return Response(content=content, media_type=media_type)
+
+
+@router.get(
+    "/knowledge-base/{kb_id}/files/{file_id}/content",
+    summary="文件提取文本内容",
+)
+async def get_kb_file_content(
+    kb_id: str, file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
+    f = await KnowledgeBaseFileService.get_by_id(db, file_id)
+    if not f or f.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return {"content": f.content or "", "filename": f.filename}
 
 
 @router.put(

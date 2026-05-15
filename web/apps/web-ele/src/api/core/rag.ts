@@ -1,5 +1,6 @@
 import { requestClient } from '#/api/request';
 import { streamRequestClient } from '#/api/stream-request';
+import { useAccessStore } from '@vben/stores';
 
 // ─── Types ───
 export interface KnowledgeBase {
@@ -582,6 +583,27 @@ export async function updateRoleKbPermissionsApi(
   return requestClient.put(
     `/rag/api/knowledge-base/role/${roleId}/kb-permissions`,
     { kb_ids: kbIds },
+  );
+}
+
+// ─── File Preview ───
+export function getKbFilePreviewUrl(kbId: string, fileId: string): string {
+  const accessStore = useAccessStore();
+  return `/basic-api/rag/api/knowledge-base/${kbId}/files/${fileId}/preview?token=${accessStore.accessToken}`;
+}
+
+export async function getKbFilePreviewBlob(kbId: string, fileId: string): Promise<Blob> {
+  const accessStore = useAccessStore();
+  const token = accessStore.accessToken;
+  const resp = await fetch(
+    `/basic-api/rag/api/knowledge-base/${kbId}/files/${fileId}/preview?token=${token}`,
+  );
+  return resp.blob();
+}
+
+export async function getKbFileContentApi(kbId: string, fileId: string) {
+  return requestClient.get<{ content: string; filename: string }>(
+    `/rag/api/knowledge-base/${kbId}/files/${fileId}/content`,
   );
 }
 

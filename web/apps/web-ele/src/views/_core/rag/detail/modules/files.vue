@@ -7,11 +7,15 @@ import {
   getFileListApi,
   deleteFileApi,
   reconstructGraphApi,
+  getKbFilePreviewUrl,
+  getKbFilePreviewBlob,
+  getKbFileContentApi,
 } from '#/api/core/rag';
 import { useGraphProgress } from '#/composables/useGraphProgress';
 
 import UploadDialog from './upload-dialog.vue';
 import SchemaEditor from './schema-editor.vue';
+import FilePreviewDialog from '#/components/FilePreviewDialog.vue';
 
 const props = defineProps<{ kbId: string }>();
 
@@ -21,6 +25,11 @@ const constructingId = ref<string | null>(null);
 const progressMessage = ref('');
 const uploadDialogRef = ref<InstanceType<typeof UploadDialog>>();
 const schemaEditorRef = ref<InstanceType<typeof SchemaEditor>>();
+const previewDialogRef = ref<InstanceType<typeof FilePreviewDialog>>();
+const contentDialogVisible = ref(false);
+const contentText = ref('');
+const contentFilename = ref('');
+const contentLoading = ref(false);
 
 const { showProgressDialog, progress, constructWithProgress } = useGraphProgress();
 
@@ -85,6 +94,31 @@ function handleEditSchema(file: KnowledgeBaseFile) {
   schemaEditorRef.value?.open(file);
 }
 
+function handlePreview(file: KnowledgeBaseFile) {
+  previewDialogRef.value?.open({
+    id: file.id,
+    name: file.filename,
+    file_ext: file.file_type,
+    previewUrl: getKbFilePreviewUrl(props.kbId, file.id),
+    fetchBlob: () => getKbFilePreviewBlob(props.kbId, file.id),
+  });
+}
+
+async function handleViewContent(file: KnowledgeBaseFile) {
+  contentLoading.value = true;
+  contentDialogVisible.value = true;
+  contentText.value = '';
+  contentFilename.value = file.filename;
+  try {
+    const res = await getKbFileContentApi(props.kbId, file.id);
+    contentText.value = res.content;
+  } catch (err: any) {
+    contentText.value = '加载文本内容失败: ' + (err.message || '');
+  } finally {
+    contentLoading.value = false;
+  }
+}
+
 onMounted(() => {
   loadFiles();
 });
@@ -118,8 +152,14 @@ onMounted(() => {
           </ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="280" fixed="right">
+      <ElTableColumn label="操作" width="400" fixed="right">
         <template #default="{ row }">
+          <ElButton link type="primary" @click="handlePreview(row)">
+            预览
+          </ElButton>
+          <ElButton link type="primary" @click="handleViewContent(row)">
+            查看文本
+          </ElButton>
           <ElButton
             link
             type="primary"
@@ -151,6 +191,21 @@ onMounted(() => {
     />
     <SchemaEditor ref="schemaEditorRef" :kb-id="kbId" @updated="loadFiles" />
 
+    <FilePreviewDialog ref="previewDialogRef" />
+
+    <ElDialog
+      v-model="contentDialogVisible"
+      :title="'文本内容 - ' + contentFilename"
+      width="80vw"
+      top="5vh"
+      :close-on-click-modal="false"
+    >
+      <pre
+        v-loading="contentLoading"
+        class="content-viewer"
+      >{{ contentText || '(无文本内容)' }}</pre>
+    </ElDialog>
+
     <!-- Progress Dialog -->
     <ElDialog
       v-model="showProgressDialog"
@@ -180,5 +235,18 @@ onMounted(() => {
 
 .tab-toolbar {
   margin-bottom: 12px;
+}
+
+.content-viewer {
+  margin: 0;
+  padding: 16px;
+  max-height: 65vh;
+  overflow: auto;
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 </style>

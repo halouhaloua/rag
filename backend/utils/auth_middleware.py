@@ -56,6 +56,7 @@ QUERY_TOKEN_ALLOWED_PATTERNS = [
     r"^/api/core/file_manager/stream/.*",      # 文件流式传输
     r"^/api/core/file_manager/proxy/.*",       # 文件代理访问
     r"^/api/core/file_manager/file/download.*", # 文件下载
+    r"^/rag/api/knowledge-base/[^/]+/files/[^/]+/preview.*", # KB文件预览
 ]
 
 

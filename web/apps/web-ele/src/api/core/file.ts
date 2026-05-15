@@ -1,11 +1,6 @@
 import { useAccessStore } from '@vben/stores';
 
-/**
- * -*- coding: utf-8 -*-
- * time: 2024/12/19
- * author: 臧成龙
- * QQ: 939589097
- */
+
 import { requestClient } from '#/api/request';
 
 export namespace SystemFileManagerApi {

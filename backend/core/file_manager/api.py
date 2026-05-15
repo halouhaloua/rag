@@ -12,6 +12,7 @@
 """
 import os
 from typing import Optional, List
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, Response, FileResponse
@@ -376,13 +377,13 @@ async def stream_file(
             file_iterator(),
             media_type=file_obj.mime_type or 'application/octet-stream',
             headers={
-                'Content-Disposition': f'inline; filename="{file_obj.name}"',
+                'Content-Disposition': f"inline; filename*=UTF-8''{quote(file_obj.name)}",
                 'Content-Length': str(file_obj.size),
                 'Accept-Ranges': 'bytes',
                 'Cache-Control': 'public, max-age=3600',
             }
         )
-    
+
     elif file_obj.storage_type == 'minio' and hasattr(storage, 'get_file_content'):
         # Minio存储，通过后端转发
         try:
@@ -391,7 +392,7 @@ async def stream_file(
                 file_response,
                 media_type=file_obj.mime_type or 'application/octet-stream',
                 headers={
-                    'Content-Disposition': f'inline; filename="{file_obj.name}"',
+                    'Content-Disposition': f"inline; filename*=UTF-8''{quote(file_obj.name)}",
                     'Content-Length': str(file_obj.size),
                     'Accept-Ranges': 'bytes',
                 }
@@ -439,24 +440,24 @@ async def proxy_file(
             content=content,
             media_type=file_obj.mime_type or 'application/octet-stream',
             headers={
-                'Content-Disposition': f'{disposition}; filename="{file_obj.name}"',
+                'Content-Disposition': f"{disposition}; filename*=UTF-8''{quote(file_obj.name)}",
                 'Content-Length': str(len(content)),
                 'Cache-Control': 'public, max-age=3600',
                 'ETag': f'"{file_obj.md5}"' if file_obj.md5 else '',
             }
         )
-    
+
     elif file_obj.storage_type == 'minio' and hasattr(storage, 'get_file_content'):
         # Minio存储处理
         try:
             file_response = storage.get_file_content(file_obj.storage_path)
             content = file_response.read()
-            
+
             return Response(
                 content=content,
                 media_type=file_obj.mime_type or 'application/octet-stream',
                 headers={
-                    'Content-Disposition': f'{disposition}; filename="{file_obj.name}"',
+                    'Content-Disposition': f"{disposition}; filename*=UTF-8''{quote(file_obj.name)}",
                     'Content-Length': str(len(content)),
                     'Cache-Control': 'public, max-age=3600',
                     'ETag': f'"{file_obj.md5}"' if file_obj.md5 else '',
