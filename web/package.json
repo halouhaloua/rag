@@ -1,5 +1,5 @@
 {
-  "name": "zq-platform",
+  "name": "my-platform",
   "version": "5.5.9",
   "private": true,
   "keywords": [
@@ -14,15 +14,6 @@
     "vue vben admin pro",
     "vue3"
   ],
-  "homepage": "https://github.com/jiangzhikj/zq-platform",
-  "bugs": "https://github.com/jiangzhikj/zq-platform/issues",
-  "repository": "vbenjs/vue-vben-admin.git",
-  "license": "MIT",
-  "author": {
-    "name": "zq-platform",
-    "email": "jiangzhikj@outlook.com",
-    "url": "https://github.com/anncwb"
-  },
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 turbo build",

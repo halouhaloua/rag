@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { ChatMessageItem } from '#/composables/useChat';
 
-import { nextTick, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 
-import { ElButton, ElInput, ElSwitch, ElTag } from 'element-plus';
+import { ElButton, ElInput, ElTag } from 'element-plus';
 import { marked } from 'marked';
 
 const props = defineProps<{
@@ -54,11 +54,10 @@ function toggleChunks(key: string) {
 }
 
 function scrollToBottom() {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
-  });
+  const el = messagesContainer.value;
+  if (el) {
+    el.scrollTop = el.scrollHeight;
+  }
 }
 
 function handleSend() {
@@ -80,14 +79,10 @@ function onKeydown(e: Event) {
   }
 }
 
-watch(() => props.messages.length, scrollToBottom);
-
 watch(
-  () => {
-    if (props.messages.length === 0) return '';
-    return props.messages[props.messages.length - 1]?.content ?? '';
-  },
+  () => props.messages[props.messages.length - 1],
   scrollToBottom,
+  { flush: 'post', deep: true },
 );
 </script>
 
@@ -216,14 +211,14 @@ watch(
                     >
                       <div class="step-section-title">三元组</div>
                       <div
-                        v-for="(t, ti) in (triplesExpanded.has(`${msg.id}-${si}`) ? step.triples : step.triples.slice(0, 3))"
+                        v-for="(t, ti) in (triplesExpanded.has(`${msg.id}-${si}`) ? step.triples : step.triples.slice(0, 2))"
                         :key="ti"
                         class="triple-item"
                       >
                         {{ t }}
                       </div>
                       <el-button
-                        v-if="step.triples.length > 3"
+                        v-if="step.triples.length > 2"
                         class="toggle-inline-button"
                         :class="{ expanded: triplesExpanded.has(`${msg.id}-${si}`) }"
                         size="small"
@@ -309,7 +304,6 @@ watch(
             type="primary"
             circle
             class="send-button"
-            :loading="streaming"
             :disabled="!inputText.trim()"
             @click="handleSend"
           >

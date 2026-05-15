@@ -538,6 +538,23 @@ export async function updateGraphEdgeApi(
   );
 }
 
+// ─── KB Permission Management ───
+export async function getRoleKbPermissionsApi(roleId: string) {
+  return requestClient.get<KnowledgeBaseListResult>(
+    `/rag/api/knowledge-base/role/${roleId}/kb-permissions`,
+  );
+}
+
+export async function updateRoleKbPermissionsApi(
+  roleId: string,
+  kbIds: string[],
+) {
+  return requestClient.put(
+    `/rag/api/knowledge-base/role/${roleId}/kb-permissions`,
+    { kb_ids: kbIds },
+  );
+}
+
 // ─── Status ───
 export async function getRagStatusApi() {
   return requestClient.get('/rag/api/status');

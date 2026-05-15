@@ -54,7 +54,9 @@ from graphrag.rag.db_service import (
     KnowledgeGraphService,
 )
 from graphrag.rag.socket_manager import manager
-from utils.security import verify_access_token
+from utils.security import verify_access_token, get_current_user
+from core.user.model import User
+from graphrag.kb_manager.service import KnowledgeBasePermissionService
 
 router = APIRouter(prefix="/api", tags=["知识库管理"])
 ws_router = APIRouter(prefix="/api", tags=["知识图谱WebSocket"])
@@ -100,7 +102,9 @@ async def get_status():
 # ──────────────────────────────────────────────
 @router.post("/knowledge-base", response_model=KnowledgeBaseResponse, summary="创建知识库")
 async def create_knowledge_base(
-    data: KnowledgeBaseCreate, db: AsyncSession = Depends(get_db)
+    data: KnowledgeBaseCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     existing = await KnowledgeBaseService.get_by_field(db, field="name", value=data.name)
     if existing:
@@ -113,26 +117,73 @@ async def list_knowledge_bases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=200, ge=1, le=500, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    items, total = await KnowledgeBaseService.get_list_with_file_count(
-        db, page=page, page_size=page_size
-    )
+    from sqlalchemy import select as sa_select, func as sa_func
+    from graphrag.rag.model import KnowledgeBaseFile
+
+    kb_ids = await KnowledgeBasePermissionService.get_user_visible_kb_ids(db, user)
+    if kb_ids is not None:
+        base_query = (
+            sa_select(KnowledgeBaseService.model)
+            .where(
+                KnowledgeBaseService.model.id.in_(kb_ids),
+                KnowledgeBaseService.model.is_deleted == False,
+            )
+        )
+        count_result = await db.execute(sa_select(sa_func.count()).select_from(base_query.subquery()))
+        total = count_result.scalar() or 0
+        offset = (page - 1) * page_size
+        result = await db.execute(
+            base_query.order_by(
+                KnowledgeBaseService.model.sort.desc(),
+                KnowledgeBaseService.model.sys_create_datetime.desc(),
+            ).offset(offset).limit(page_size)
+        )
+        items = list(result.scalars().all())
+    else:
+        items, total = await KnowledgeBaseService.get_list_with_file_count(
+            db, page=page, page_size=page_size
+        )
+
+    for item in items:
+        count_query = (
+            sa_select(sa_func.count(KnowledgeBaseFile.id))
+            .where(
+                KnowledgeBaseFile.kb_id == item.id,
+                KnowledgeBaseFile.is_deleted == False,
+            )
+        )
+        cnt = await db.execute(count_query)
+        item.file_count = cnt.scalar() or 0
+
     return KnowledgeBaseListResponse(items=items, total=total)
 
 
 @router.get("/knowledge-base/{kb_id}", response_model=KnowledgeBaseResponse, summary="知识库详情")
-async def get_knowledge_base(kb_id: str, db: AsyncSession = Depends(get_db)):
+async def get_knowledge_base(
+    kb_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     kb = await KnowledgeBaseService.get_by_id(db, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     kb.file_count = await KnowledgeBaseFileService.count_by_kb(db, kb_id)
     return kb
 
 
 @router.put("/knowledge-base/{kb_id}", response_model=KnowledgeBaseResponse, summary="更新知识库")
 async def update_knowledge_base(
-    kb_id: str, data: KnowledgeBaseUpdate, db: AsyncSession = Depends(get_db)
+    kb_id: str,
+    data: KnowledgeBaseUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     if data.name:
         existing = await KnowledgeBaseService.get_by_field(db, field="name", value=data.name)
         if existing and existing.id != kb_id:
@@ -144,7 +195,13 @@ async def update_knowledge_base(
 
 
 @router.delete("/knowledge-base/{kb_id}", summary="删除知识库")
-async def delete_knowledge_base(kb_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_knowledge_base(
+    kb_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     kb = await KnowledgeBaseService.get_by_id(db, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
@@ -172,10 +229,13 @@ async def upload_kb_files(
     files: List[UploadFile] = File(...),
     schema_file: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     kb = await KnowledgeBaseService.get_by_id(db, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
 
     schema_json = None
     if schema_file:
@@ -200,7 +260,9 @@ async def upload_kb_files(
     response_model=KnowledgeBaseFileListResponse,
     summary="文件列表",
 )
-async def list_kb_files(kb_id: str, db: AsyncSession = Depends(get_db)):
+async def list_kb_files(kb_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     kb = await KnowledgeBaseService.get_by_id(db, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
@@ -213,7 +275,9 @@ async def list_kb_files(kb_id: str, db: AsyncSession = Depends(get_db)):
     response_model=KnowledgeBaseFileResponse,
     summary="文件详情",
 )
-async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
+async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -225,8 +289,11 @@ async def get_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_d
     summary="更新文件Schema",
 )
 async def update_file_schema(
-    kb_id: str, file_id: str, data: FileSchemaUpdate, db: AsyncSession = Depends(get_db)
+    kb_id: str, file_id: str, data: FileSchemaUpdate, db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -240,7 +307,9 @@ async def update_file_schema(
     "/knowledge-base/{kb_id}/files/{file_id}",
     summary="删除文件",
 )
-async def delete_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_kb_file(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -262,7 +331,10 @@ async def update_graph_edge(
     file_id: str,
     data: GraphEdgeUpdateRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -292,10 +364,13 @@ async def construct_file_graph(
     file_id: str,
     client_id: str = Query("default"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     if not GRAPHRAG_AVAILABLE:
         raise HTTPException(status_code=503, detail="GraphRAG components not available.")
 
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -315,7 +390,9 @@ async def construct_file_graph(
     "/knowledge-base/{kb_id}/files/{file_id}/graph",
     summary="获取图谱可视化数据",
 )
-async def get_file_graph(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db)):
+async def get_file_graph(kb_id: str, file_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -336,7 +413,10 @@ async def update_graph_node_category(
     file_id: str,
     data: GraphCategoryUpdate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -357,7 +437,10 @@ async def add_graph_edges(
     file_id: str,
     data: GraphEdgesCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -378,7 +461,10 @@ async def add_graph_nodes(
     file_id: str,
     data: GraphNodesCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -399,7 +485,10 @@ async def delete_graph_node(
     file_id: str,
     node_name: str,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -420,7 +509,10 @@ async def delete_graph_edge(
     file_id: str,
     data: GraphEdgeDeleteRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -441,10 +533,13 @@ async def reconstruct_file_graph(
     file_id: str,
     client_id: str = Query("default"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     if not GRAPHRAG_AVAILABLE:
         raise HTTPException(status_code=503, detail="GraphRAG components not available.")
 
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -476,10 +571,13 @@ async def ask_file_question(
     request: QuestionRequest,
     client_id: str = Query("default"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     if not GRAPHRAG_AVAILABLE:
         raise HTTPException(status_code=503, detail="GraphRAG components not available.")
 
+    if not await KnowledgeBasePermissionService.check_kb_access(db, kb_id, user):
+        raise HTTPException(status_code=403, detail="无权访问该知识库")
     f = await KnowledgeBaseFileService.get_by_id(db, file_id)
     if not f or f.kb_id != kb_id:
         raise HTTPException(status_code=404, detail="文件不存在")

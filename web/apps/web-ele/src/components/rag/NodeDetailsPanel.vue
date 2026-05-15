@@ -79,7 +79,7 @@ function isArray(value: unknown): value is unknown[] {
   position: absolute;
   top: 80px;
   right: 20px;
-  z-index: 100;
+  z-index: 500;
   width: 300px;
   background: rgb(255 255 255 / 95%);
   border: 1px solid rgb(226 232 240 / 80%);
